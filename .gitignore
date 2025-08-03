@@ -1,0 +1,10 @@
+/backend/node_modules/
+/frontend/node_modules/
+
+# Ignore dist/build folders
+**/dist/
+/**/build/
+
+# Ignore environment and system files
+**/.env
+.DS_Store
