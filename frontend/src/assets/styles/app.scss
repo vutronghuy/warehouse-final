@@ -1,0 +1,9 @@
+@use './libs/antd';
+@use './libs/tailwind';
+@use './common/general';
+@use './common/fonts';
+
+// Override base SVG style to work with Ant Design
+svg {
+  vertical-align: initial;
+}

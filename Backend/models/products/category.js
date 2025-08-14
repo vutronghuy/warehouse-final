@@ -1,28 +1,40 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-const categorySchema = mongoose.Schema({
+const categorySchema = new Schema({
   name: {
-   type: mongoose.Schema.Types.ObjectId,
+    type: String,
     required: true,
     unique: true,
     trim: true
   },
+  code: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    uppercase: true
+  },
   description: {
-   type: mongoose.Schema.Types.ObjectId,
+    type: String,
     trim: true
   },
   status: {
- type: mongoose.Schema.Types.ObjectId,
+    type: String,
     default: 'active',
     enum: ['active', 'inactive']
   },
+  sortOrder: {
+    type: Number,
+    default: 0
+  },
   createdBy: {
- type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
   updatedBy: {
-   type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'User'
   },
   deletedAt: {
@@ -33,6 +45,22 @@ const categorySchema = mongoose.Schema({
   timestamps: true
 });
 
-module.exports = {
-    categorySchema
+// Indexes
+categorySchema.index({ code: 1 });
+categorySchema.index({ status: 1, sortOrder: 1 });
+
+// Virtual for products count
+categorySchema.virtual('productsCount', {
+  ref: 'Product',
+  localField: '_id',
+  foreignField: 'categoryId',
+  count: true
+});
+
+// Static methods
+categorySchema.statics.getActiveCategories = function() {
+  return this.find({ status: 'active', deletedAt: null })
+    .sort({ sortOrder: 1, name: 1 });
 };
+
+module.exports = mongoose.model("Category", categorySchema);

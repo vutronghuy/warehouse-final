@@ -1,62 +1,246 @@
-// supplier.controller.js
+const Supplier = require('../models/products/Supplier');
+const mongoose = require('mongoose');
 
-const Supplier = require('../models/Supplier'); // điều chỉnh lại đường dẫn nếu cần
-
-exports.createSupplier = async (req, res, next) => {
+// Get all suppliers
+exports.getAllSuppliers = async (req, res, next) => {
   try {
-    // 1. Lấy dữ liệu từ body
-    const {
-      name,
-      phone,
-      email,
-      address,
-      contactPerson,
-      status,      // nếu client không gửi, sẽ tự dùng default "active"
-    } = req.body;
-    // const {createby} = req.params; // tạo ra function check xem user đó là admin tạo không.
+    const { page = 1, limit = 10, search, status, businessType } = req.query;
 
-    // 2. Kiểm tra bắt buộc
-    if (!name) {
-      return res.status(400).json({ message: 'Tên supplier (name) là bắt buộc.' });
+    // Build filter object
+    const filter = {};
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { code: { $regex: search, $options: 'i' } },
+        { 'contactInfo.email': { $regex: search, $options: 'i' } },
+        { 'contactInfo.phone': { $regex: search, $options: 'i' } }
+      ];
     }
-    // if (!req.user || !req.user._id) {
-    //   // Giả sử bạn đã có middleware xác thực gán req.user
-    //   return res.status(401).json({ message: 'Không có thông tin người dùng tạo.' });
-    // }
 
-    // 3. Chuẩn bị payload
-    const payload = {
-      name: name.trim(),
-      phone: phone ? phone.trim() : undefined,
-      email: email ? email.toLowerCase().trim() : undefined,
-      address: address ? address.trim() : undefined,
-      contactPerson: contactPerson ? contactPerson.trim() : undefined,
-      status, // enum ["active", "inactive"]
-      // createdBy: req.user._id,
-    };
+    if (status) {
+      filter.status = status;
+    }
 
-    // 4. Tạo supplier trong DB
-    const newSupplier = await Supplier.create(payload);
+    if (businessType) {
+      filter['businessInfo.businessType'] = businessType;
+    }
 
-    // 5. Trả về kết quả
-    return res.status(201).json({
-      message: 'Tạo supplier thành công.',
-      data: newSupplier,
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get suppliers with pagination
+    const suppliers = await Supplier.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Get total count for pagination
+    const total = await Supplier.countDocuments(filter);
+
+    res.json({
+      success: true,
+      suppliers,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / parseInt(limit)),
+        totalSuppliers: total,
+        hasNext: skip + suppliers.length < total,
+        hasPrev: parseInt(page) > 1
+      }
     });
-  } catch (err) {
-    // 6. Bắt lỗi duplicate key (unique fields: name, email)
-    if (err.code === 11000) {
-      // Lấy ra field bị trùng từ err.keyValue
-      const field = Object.keys(err.keyValue)[0];
-      return res.status(409).json({
-        message: `Giá trị ${field} đã tồn tại, vui lòng sử dụng ${field} khác.`,
+  } catch (error) {
+    console.error('Error fetching suppliers:', error);
+    next(error);
+  }
+};
+
+// Get supplier by ID
+exports.getSupplierById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid supplier ID format'
       });
     }
-    // 7. Các lỗi khác
-    console.error('Create supplier error:', err);
-    return res.status(500).json({
-      message: 'Đã có lỗi xảy ra khi tạo supplier.',
-      error: err.message,
+
+    const supplier = await Supplier.findById(id).lean();
+
+    if (!supplier) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supplier not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      supplier
     });
+  } catch (error) {
+    console.error('Error fetching supplier:', error);
+    next(error);
+  }
+};
+
+// Create new supplier
+exports.createSupplier = async (req, res, next) => {
+  try {
+    const supplierData = req.body;
+
+    // Check if supplier code already exists
+    const existingSupplier = await Supplier.findOne({ code: supplierData.code });
+    if (existingSupplier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Supplier code already exists'
+      });
+    }
+
+    // Add createdBy from authenticated user
+    supplierData.createdBy = req.user.sub; // req.user.sub contains the user ID
+
+    // Create new supplier
+    const supplier = new Supplier(supplierData);
+    await supplier.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Supplier created successfully',
+      supplier: supplier.toObject()
+    });
+  } catch (error) {
+    console.error('Error creating supplier:', error);
+
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors
+      });
+    }
+
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        success: false,
+        message: `${field} already exists`
+      });
+    }
+
+    next(error);
+  }
+};
+
+// Update supplier
+exports.updateSupplier = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid supplier ID format'
+      });
+    }
+
+    // Check if supplier exists
+    const existingSupplier = await Supplier.findById(id);
+    if (!existingSupplier) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supplier not found'
+      });
+    }
+
+    // Check if code is being changed and if new code already exists
+    if (updateData.code && updateData.code !== existingSupplier.code) {
+      const codeExists = await Supplier.findOne({
+        code: updateData.code,
+        _id: { $ne: id }
+      });
+      if (codeExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'Supplier code already exists'
+        });
+      }
+    }
+
+    // Add updatedBy from authenticated user
+    updateData.updatedBy = req.user.sub;
+    updateData.updatedAt = new Date();
+
+    // Update supplier
+    const supplier = await Supplier.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    ).lean();
+
+    res.json({
+      success: true,
+      message: 'Supplier updated successfully',
+      supplier
+    });
+  } catch (error) {
+    console.error('Error updating supplier:', error);
+
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors
+      });
+    }
+
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        success: false,
+        message: `${field} already exists`
+      });
+    }
+
+    next(error);
+  }
+};
+
+// Delete supplier
+exports.deleteSupplier = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid supplier ID format'
+      });
+    }
+
+    const supplier = await Supplier.findById(id);
+    if (!supplier) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supplier not found'
+      });
+    }
+
+    await Supplier.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Supplier deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting supplier:', error);
+    next(error);
   }
 };

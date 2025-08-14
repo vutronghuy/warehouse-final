@@ -23,6 +23,13 @@ const productSchema = new Schema(
       ref: "Category",
       required: true,
     },
+
+    // Primary supplier (main supplier for this product)
+    primarySupplierId: {
+      type: Schema.Types.ObjectId,
+      ref: "Supplier",
+      required: true,
+    },
     minStockLevel: { type: Number, default: 0, min: 0 },
     status: { type: String, default: "active", enum: ["active", "inactive"] },
     expiryDate: { type: Date },
