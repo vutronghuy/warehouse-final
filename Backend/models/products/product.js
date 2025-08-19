@@ -16,6 +16,7 @@ const productSchema = new Schema(
       type: String,
       enum: ["pcs", "kg", "liter", "box", "pack"],
       required: true,
+      trim: true
     },
     basePrice: { type: Number, default: 0, min: 0 },
     categoryId: {
@@ -30,14 +31,22 @@ const productSchema = new Schema(
       ref: "Supplier",
       required: true,
     },
+
+
+
     minStockLevel: { type: Number, default: 0, min: 0 },
-    status: { type: String, default: "active", enum: ["active", "inactive"] },
+    status: {
+      type: String,
+      default: "in stock",
+      enum: [ "in stock", "out of stock"]
+    },
     expiryDate: { type: Date },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Product", productSchema);
+// Prevent overwrite error by checking if model already exists
+module.exports = mongoose.models.Product || mongoose.model("Product", productSchema);

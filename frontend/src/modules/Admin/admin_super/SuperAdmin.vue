@@ -63,8 +63,9 @@
           </button>
         </div>
 
-        <!-- Search Bar -->
-        <div class="mb-6">
+        <!-- Search Bar and Filters -->
+        <div class="mb-6 flex flex-col sm:flex-row gap-4">
+          <!-- Search Input -->
           <div class="relative max-w-md">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,6 +83,32 @@
               placeholder="Search users..."
               class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-colors duration-150"
             />
+          </div>
+
+          <!-- Role Filter -->
+          <div class="relative">
+            <select
+              v-model="selectedRole"
+              class="block w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-150"
+            >
+              <option value="">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="manager">Manager</option>
+              <option value="staff">Staff</option>
+              <option value="accounter">Accounter</option>
+            </select>
+          </div>
+
+          <!-- Status Filter -->
+          <div class="relative">
+            <select
+              v-model="selectedStatus"
+              class="block w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-150"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
         </div>
 
@@ -255,6 +282,8 @@ export default {
   data() {
     return {
       search: '',
+      selectedRole: '',
+      selectedStatus: '',
       users: [],
       showModal: false,
       showEditModal: false,
@@ -269,25 +298,41 @@ export default {
   },
   computed: {
     filteredUsers() {
+      let filtered = this.users;
+
+      // Filter by search query
       const q = this.search.trim().toLowerCase();
-      if (!q) return this.users;
-      return this.users.filter((u) => {
-        const name = (
-          u.admin?.username ||
-          u.manager?.username ||
-          u.staff?.username ||
-          u.accounter?.username ||
-          ''
-        ).toLowerCase();
-        const email = (
-          u.admin?.email ||
-          u.manager?.email ||
-          u.staff?.email ||
-          u.accounter?.email ||
-          ''
-        ).toLowerCase();
-        return name.includes(q) || email.includes(q);
-      });
+      if (q) {
+        filtered = filtered.filter((u) => {
+          const name = (
+            u.admin?.username ||
+            u.manager?.username ||
+            u.staff?.username ||
+            u.accounter?.username ||
+            ''
+          ).toLowerCase();
+          const email = (
+            u.admin?.email ||
+            u.manager?.email ||
+            u.staff?.email ||
+            u.accounter?.email ||
+            ''
+          ).toLowerCase();
+          return name.includes(q) || email.includes(q);
+        });
+      }
+
+      // Filter by role
+      if (this.selectedRole) {
+        filtered = filtered.filter((u) => u.role === this.selectedRole);
+      }
+
+      // Filter by status
+      if (this.selectedStatus) {
+        filtered = filtered.filter((u) => u.userStatus?.status === this.selectedStatus);
+      }
+
+      return filtered;
     },
     totalPages() {
       return Math.max(1, Math.ceil(this.filteredUsers.length / this.pageSize));
@@ -310,6 +355,12 @@ export default {
   },
   watch: {
     search() {
+      this.currentPage = 1;
+    },
+    selectedRole() {
+      this.currentPage = 1;
+    },
+    selectedStatus() {
       this.currentPage = 1;
     },
   },
@@ -367,7 +418,7 @@ export default {
         if (token) {
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
-        const res = await axios.get('/user'); // GET /user
+        const res = await axios.get('/api/users'); // GET /user
         this.users = res.data.users || res.data || [];
         this.currentPage = 1;
       } catch (err) {
@@ -416,12 +467,6 @@ export default {
       this.selectedUser = null;
       // Option A: re-fetch
       await this.fetchUsers();
-
-      // Option B: merge in-place (uncomment if you prefer)
-      // if (updatedUser && updatedUser._id) {
-      //   const idx = this.users.findIndex(u => u._id === updatedUser._id);
-      //   if (idx !== -1) this.$set(this.users, idx, updatedUser);
-      // }
     },
 
     async deleteUser(id) {
@@ -430,7 +475,7 @@ export default {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         if (token) axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-        await axios.delete(`/user/${id}`);
+        await axios.delete(`/api/users/${id}`);
         this.fetchUsers();
       } catch (err) {
         console.error(err.response?.data || err);

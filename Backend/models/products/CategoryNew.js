@@ -24,10 +24,6 @@ const categorySchema = new Schema({
     default: 'active',
     enum: ['active', 'inactive']
   },
-  sortOrder: {
-    type: Number,
-    default: 0
-  },
   createdBy: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -47,20 +43,20 @@ const categorySchema = new Schema({
 
 // Indexes
 categorySchema.index({ code: 1 });
-categorySchema.index({ status: 1, sortOrder: 1 });
+categorySchema.index({ status: 1 });
 
-// Virtual for products count
-categorySchema.virtual('productsCount', {
-  ref: 'Product',
-  localField: '_id',
-  foreignField: 'categoryId',
-  count: true
-});
+// Virtual for products count - Disabled until Product model is available
+// categorySchema.virtual('productsCount', {
+//   ref: 'Product',
+//   localField: '_id',
+//   foreignField: 'categoryId',
+//   count: true
+// });
 
 // Static methods
 categorySchema.statics.getActiveCategories = function() {
   return this.find({ status: 'active', deletedAt: null })
-    .sort({ sortOrder: 1, name: 1 });
+    .sort({ name: 1 });
 };
 
 module.exports = mongoose.model("Category", categorySchema);

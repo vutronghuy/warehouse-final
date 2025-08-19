@@ -9,7 +9,7 @@
       <header class="bg-white border-b border-gray-200 px-6 py-4">
         <div class="flex items-center justify-between">
           <div>
-            <h1 class="text-lg font-medium text-gray-900">Supplier Management</h1>
+            <h1 class="text-lg font-medium text-gray-900">Category Management</h1>
           </div>
 
           <div class="flex items-center gap-4">
@@ -52,7 +52,7 @@
       <main class="flex-1 overflow-auto bg-gray-50 p-8">
         <!-- Page Header -->
         <div class="flex items-center justify-between mb-8">
-          <h2 class="text-3xl font-bold text-gray-900">Supplier Management</h2>
+          <h2 class="text-3xl font-bold text-gray-900">Category Management</h2>
           <button
             @click="showCreateModal = true"
             class="inline-flex items-center px-4 py-2.5 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-150"
@@ -60,7 +60,7 @@
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            Add Supplier
+            Add Category
           </button>
         </div>
 
@@ -75,7 +75,7 @@
             <input
               v-model="search"
               type="text"
-              placeholder="Search suppliers..."
+              placeholder="Search categories..."
               class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-colors duration-150"
             />
           </div>
@@ -86,51 +86,37 @@
               class="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Status</option>
-              <option value="cooperation">Cooperation</option>
-              <option value="stop cooperation">Stop Cooperation</option>
-            </select>
-
-            <select
-              v-model="businessTypeFilter"
-              class="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All Types</option>
-              <option value="manufacturer">Manufacturer</option>
-              <option value="distributor">Distributor</option>
-              <option value="retailer">Retailer</option>
-              <option value="wholesaler">Wholesaler</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
             </select>
           </div>
         </div>
 
-        <!-- Suppliers Table -->
+        <!-- Categories Table -->
         <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
           <div v-if="isLoading" class="flex justify-center items-center py-12">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
 
-          <div v-else-if="paginatedSuppliers.length === 0" class="text-center py-12">
+          <div v-else-if="paginatedCategories.length === 0" class="text-center py-12">
             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8l-4 4m0 0l-4-4m4 4V3" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No suppliers found</h3>
-            <p class="mt-1 text-sm text-gray-500">Get started by creating a new supplier.</p>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No categories found</h3>
+            <p class="mt-1 text-sm text-gray-500">Get started by creating a new category.</p>
           </div>
 
           <table v-else class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Supplier
+                  Category
                 </th>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Contact
+                  Code
                 </th>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Business Type
-                </th>
-                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Payment Terms
+                  Description
                 </th>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Status
@@ -141,49 +127,41 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="supplier in paginatedSuppliers" :key="supplier._id" class="hover:bg-gray-50">
+              <tr v-for="category in paginatedCategories" :key="category._id" class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <div>
-                    <div class="text-sm font-medium text-gray-900">{{ supplier.name }}</div>
-                    <div class="text-sm text-gray-500">{{ supplier.code }}</div>
-                  </div>
+                  <div class="text-sm font-medium text-gray-900">{{ category.name }}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <div>
-                    <div class="text-sm text-gray-900">{{ supplier.contactInfo?.email || 'N/A' }}</div>
-                    <div class="text-sm text-gray-500">{{ supplier.contactInfo?.phone || 'N/A' }}</div>
-                  </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize"
-                        :class="getBusinessTypeClass(supplier.businessInfo?.businessType)">
-                    {{ supplier.businessInfo?.businessType || 'N/A' }}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    {{ category.code }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ formatPaymentTerms(supplier.paymentTerms) }}
+                <td class="px-6 py-4">
+                  <div class="text-sm text-gray-900 max-w-xs truncate">
+                    {{ category.description || 'No description' }}
+                  </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                        :class="getStatusClass(supplier.status)">
-                    {{ supplier.status }}
+                        :class="getStatusClass(category.status)">
+                    {{ category.status }}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div class="flex items-center justify-end space-x-2">
                     <button
-                      @click="openEditModal(supplier)"
+                      @click="openEditModal(category)"
                       class="text-blue-600 hover:text-blue-900 transition-colors"
-                      title="Edit supplier"
+                      title="Edit category"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button
-                      @click="deleteSupplier(supplier._id, supplier.name)"
+                      @click="deleteCategory(category._id, category.name)"
                       class="text-red-600 hover:text-red-900 transition-colors"
-                      title="Delete supplier"
+                      title="Delete category"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -198,8 +176,8 @@
           <!-- Pagination -->
           <div class="px-6 py-4 bg-white border-t flex items-center justify-between">
             <div class="text-sm text-gray-600">
-              Showing <span class="font-medium">{{ paginatedSuppliers.length }}</span> of
-              <span class="font-medium">{{ filteredSuppliers.length }}</span> suppliers
+              Showing <span class="font-medium">{{ paginatedCategories.length }}</span> of
+              <span class="font-medium">{{ filteredCategories.length }}</span> categories
             </div>
 
             <div class="flex items-center space-x-2">
@@ -241,18 +219,18 @@
     </div>
 
     <!-- Create Modal -->
-    <CreateSupplierModal
+    <CreateCategoryModal
       :show="showCreateModal"
       @close="showCreateModal = false"
-      @created="handleSupplierCreated"
+      @created="handleCategoryCreated"
     />
 
     <!-- Edit Modal -->
-    <EditSupplierModal
+    <EditCategoryModal
       :show="showEditModal"
-      :supplier="selectedSupplier"
+      :category="selectedCategory"
       @close="closeEditModal"
-      @updated="handleSupplierUpdated"
+      @updated="handleCategoryUpdated"
     />
   </div>
 </template>
@@ -260,26 +238,25 @@
 <script>
 import axios from 'axios';
 import Sidebar from '../Sidebar.vue';
-import CreateSupplierModal from './CreateSupplierModal.vue';
-import EditSupplierModal from './EditSupplierModal.vue';
+import CreateCategoryModal from './CreateCategoryModal.vue';
+import EditCategoryModal from './EditCategoryModal.vue';
 
 export default {
-  name: 'SupplierTable',
+  name: 'CategoryTable',
   components: {
     Sidebar,
-    CreateSupplierModal,
-    EditSupplierModal
+    CreateCategoryModal,
+    EditCategoryModal
   },
   data() {
     return {
-      suppliers: [],
+      categories: [],
       search: '',
       statusFilter: '',
-      businessTypeFilter: '',
       isLoading: false,
       showCreateModal: false,
       showEditModal: false,
-      selectedSupplier: null,
+      selectedCategory: null,
       currentPage: 1,
       pageSize: 10,
       showUserMenu: false,
@@ -287,38 +264,35 @@ export default {
     };
   },
   computed: {
-    filteredSuppliers() {
-      let filtered = this.suppliers;
+    filteredCategories() {
+      let filtered = this.categories;
 
       // Search filter
       if (this.search.trim()) {
         const searchTerm = this.search.toLowerCase();
-        filtered = filtered.filter(supplier =>
-          supplier.name.toLowerCase().includes(searchTerm) ||
-          supplier.code.toLowerCase().includes(searchTerm) ||
-          supplier.contactInfo?.email?.toLowerCase().includes(searchTerm) ||
-          supplier.contactInfo?.phone?.includes(searchTerm)
+        filtered = filtered.filter(category =>
+          category.name.toLowerCase().includes(searchTerm) ||
+          category.code.toLowerCase().includes(searchTerm) ||
+          (category.description && category.description.toLowerCase().includes(searchTerm))
         );
       }
 
       // Status filter
       if (this.statusFilter) {
-        filtered = filtered.filter(supplier => supplier.status === this.statusFilter);
+        filtered = filtered.filter(category => category.status === this.statusFilter);
       }
 
-      // Business type filter
-      if (this.businessTypeFilter) {
-        filtered = filtered.filter(supplier => supplier.businessInfo?.businessType === this.businessTypeFilter);
-      }
-
-      return filtered;
+      return filtered.sort((a, b) => {
+        // Sort by name only
+        return a.name.localeCompare(b.name);
+      });
     },
     totalPages() {
-      return Math.max(1, Math.ceil(this.filteredSuppliers.length / this.pageSize));
+      return Math.max(1, Math.ceil(this.filteredCategories.length / this.pageSize));
     },
-    paginatedSuppliers() {
+    paginatedCategories() {
       const start = (this.currentPage - 1) * this.pageSize;
-      return this.filteredSuppliers.slice(start, start + this.pageSize);
+      return this.filteredCategories.slice(start, start + this.pageSize);
     },
     visiblePages() {
       const pages = [];
@@ -373,9 +347,6 @@ export default {
     },
     statusFilter() {
       this.currentPage = 1;
-    },
-    businessTypeFilter() {
-      this.currentPage = 1;
     }
   },
   async mounted() {
@@ -394,7 +365,7 @@ export default {
       this.currentUserObj = null;
     }
 
-    await this.fetchSuppliers();
+    await this.fetchCategories();
   },
   methods: {
     _loadUserFromStorage() {
@@ -418,7 +389,7 @@ export default {
       // Redirect to login
       this.$router.push('/login');
     },
-    async fetchSuppliers() {
+    async fetchCategories() {
       this.isLoading = true;
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -441,14 +412,14 @@ export default {
           }
         };
 
-        console.log('🔄 Fetching suppliers with cache-busting...');
-        const response = await axios.get('/api/suppliers', config);
+        console.log('🔄 Fetching categories with cache-busting...');
+        const response = await axios.get('/api/categories', config);
 
-        console.log('📊 Suppliers response status:', response.status);
-        this.suppliers = response.data.suppliers || response.data || [];
-        console.log('✅ Suppliers loaded:', this.suppliers.length);
+        console.log('📊 Categories response status:', response.status);
+        this.categories = response.data.categories || response.data || [];
+        console.log('✅ Categories loaded:', this.categories.length);
       } catch (error) {
-        console.error('Error fetching suppliers:', error);
+        console.error('Error fetching categories:', error);
         if (error.response?.status === 401) {
           this.$router.push('/login');
         }
@@ -456,23 +427,23 @@ export default {
         this.isLoading = false;
       }
     },
-    openEditModal(supplier) {
-      this.selectedSupplier = JSON.parse(JSON.stringify(supplier));
+    openEditModal(category) {
+      this.selectedCategory = JSON.parse(JSON.stringify(category));
       this.showEditModal = true;
     },
     closeEditModal() {
       this.showEditModal = false;
-      this.selectedSupplier = null;
+      this.selectedCategory = null;
     },
-    async handleSupplierCreated(newSupplier) {
-      await this.fetchSuppliers();
+    async handleCategoryCreated(newCategory) {
+      await this.fetchCategories();
     },
-    async handleSupplierUpdated(updatedSupplier) {
-      await this.fetchSuppliers();
+    async handleCategoryUpdated(updatedCategory) {
+      await this.fetchCategories();
     },
-    async deleteSupplier(id, name = 'this supplier') {
+    async deleteCategory(id, name) {
       // Enhanced confirmation dialog for permanent deletion
-      const confirmMessage = `⚠️ Are you sure you want to permanently delete supplier "${name}"?\n\n❌ This action cannot be undone!`;
+      const confirmMessage = `⚠️ Are you sure you want to permanently delete category "${name}"?\n\n❌ This action cannot be undone!`;
 
       if (!confirm(confirmMessage)) {
         return;
@@ -484,29 +455,29 @@ export default {
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
 
-        console.log(`🗑️ Permanently deleting supplier: ${name} (ID: ${id})`);
+        console.log(`🗑️ Permanently deleting category: ${name} (ID: ${id})`);
 
-        const response = await axios.delete(`/api/suppliers/${id}`);
+        const response = await axios.delete(`/api/categories/${id}`);
 
         if (response.data.success) {
-          console.log('✅ Supplier permanently deleted');
-          alert(`✅ Supplier "${name}" has been permanently deleted.`);
+          console.log('✅ Category permanently deleted:', response.data.deletedCategory);
+          alert(`✅ Category "${name}" has been permanently deleted.`);
 
           // Force refresh with multiple strategies
-          console.log('🔄 Force refreshing suppliers list...');
-          await this.fetchSuppliers();
+          console.log('🔄 Force refreshing categories list...');
+          await this.fetchCategories();
 
           // Additional refresh after short delay to ensure data is updated
           setTimeout(async () => {
-            await this.fetchSuppliers();
+            await this.fetchCategories();
             console.log('🔄 Secondary refresh completed');
           }, 500);
         } else {
           throw new Error(response.data.message || 'Delete failed');
         }
       } catch (error) {
-        console.error('Error deleting supplier:', error);
-        const errorMessage = error.response?.data?.message || 'Failed to delete supplier. Please try again.';
+        console.error('Error deleting category:', error);
+        const errorMessage = error.response?.data?.message || 'Failed to delete category. Please try again.';
         alert(`❌ Delete failed: ${errorMessage}`);
       }
     },
@@ -527,42 +498,12 @@ export default {
     },
     getStatusClass(status) {
       switch (status) {
-        case 'cooperation':
+        case 'active':
           return 'bg-green-100 text-green-800';
-        case 'stop cooperation':
-          return 'bg-red-100 text-red-800';
+        case 'inactive':
+          return 'bg-gray-100 text-gray-800';
         default:
           return 'bg-gray-100 text-gray-800';
-      }
-    },
-    getBusinessTypeClass(type) {
-      switch (type) {
-        case 'manufacturer':
-          return 'bg-blue-100 text-blue-800';
-        case 'distributor':
-          return 'bg-green-100 text-green-800';
-        case 'retailer':
-          return 'bg-purple-100 text-purple-800';
-        case 'wholesaler':
-          return 'bg-orange-100 text-orange-800';
-        default:
-          return 'bg-gray-100 text-gray-800';
-      }
-    },
-    formatPaymentTerms(terms) {
-      switch (terms) {
-        case 'cash':
-          return 'Cash';
-        case 'net15':
-          return 'Net 15';
-        case 'net30':
-          return 'Net 30';
-        case 'net45':
-          return 'Net 45';
-        case 'net60':
-          return 'Net 60';
-        default:
-          return terms || 'N/A';
       }
     }
   }

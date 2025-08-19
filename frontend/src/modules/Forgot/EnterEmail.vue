@@ -12,7 +12,7 @@
 
       <!-- Title -->
       <div class="text-center mb-8">
-        <h2 class="text-2xl font-semibold text-gray-900">Đặt lại mật khẩu</h2>
+        <h2 class="text-2xl font-semibold text-gray-900">Enter email address</h2>
       </div>
 
       <!-- Form -->
@@ -22,7 +22,7 @@
           <input
             v-model="email"
             type="email"
-            placeholder="Nhập email của bạn"
+            placeholder="Enter your email "
             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-400 focus:border-transparent outline-none transition-all placeholder-gray-400"
             required
           />
@@ -34,7 +34,7 @@
           :disabled="isLoading"
           class="w-full bg-red-400 hover:bg-red-500 text-white font-medium py-3 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span v-if="!isLoading">TIẾP THEO</span>
+          <span v-if="!isLoading">NEXT</span>
           <span v-else class="flex items-center justify-center">
             <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

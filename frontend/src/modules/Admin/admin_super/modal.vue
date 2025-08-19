@@ -132,10 +132,12 @@
 
 <script>
 import axios from 'axios';
+import { notifyWarehouseUpdate } from '@/utils/warehouseUtils.js';
 axios.defaults.baseURL = 'http://localhost:3003';
 
 export default {
   name: 'CreateUserModal',
+  emits: ['close', 'created'],
   props: { show: Boolean },
   data() {
     return {
@@ -177,8 +179,13 @@ export default {
     },
     async fetchWarehouses() {
       try {
-        const res = await axios.get('/warehouse');
-        const list = res.data.data || res.data.warehouses || [];
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await axios.get('/api/warehouses/active');
+        const list = res.data.warehouses || [];
         this.warehouses = Array.isArray(list) ? list : [];
       } catch (err) {
         console.error('Lấy danh sách warehouse lỗi:', err);
@@ -211,11 +218,30 @@ export default {
 
       this.loading = true;
       try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+
         const payload = {
           role: this.form.role,
           [this.form.role]: this.form[this.form.role],
         };
-        const { data } = await axios.post('/user/create', payload);
+        const { data } = await axios.post('/api/users/create', payload);
+
+        // Notify warehouse update if user has warehouse assignment
+        const warehouseId = this.form[this.form.role]?.warehouseId;
+        if (warehouseId) {
+          notifyWarehouseUpdate(warehouseId);
+        }
+
+        // For admin role, notify all managed warehouses
+        if (this.form.role === 'admin' && this.form.admin.managedWarehouses) {
+          this.form.admin.managedWarehouses.forEach(whId => {
+            notifyWarehouseUpdate(whId);
+          });
+        }
+
         this.$emit('created', data.user);
         this.close();
       } catch (err) {

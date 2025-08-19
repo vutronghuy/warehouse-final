@@ -48,7 +48,7 @@
         <!-- Contact Information -->
         <div class="border-t pt-6">
           <h4 class="text-md font-medium text-gray-900 mb-4">Contact Information</h4>
-          
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
@@ -99,7 +99,7 @@
         <!-- Address -->
         <div class="border-t pt-6">
           <h4 class="text-md font-medium text-gray-900 mb-4">Address</h4>
-          
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="md:col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
@@ -156,7 +156,7 @@
         <!-- Business Information -->
         <div class="border-t pt-6">
           <h4 class="text-md font-medium text-gray-900 mb-4">Business Information</h4>
-          
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Tax ID</label>
@@ -209,7 +209,7 @@
         <!-- Contact Person -->
         <div class="border-t pt-6">
           <h4 class="text-md font-medium text-gray-900 mb-4">Contact Person</h4>
-          
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
@@ -336,6 +336,7 @@ export default {
           phone: ''
         },
         paymentTerms: 'net30',
+        status: 'cooperation',
         notes: ''
       }
     };
@@ -374,6 +375,7 @@ export default {
           phone: ''
         },
         paymentTerms: 'net30',
+        status: 'cooperation',
         notes: ''
       };
       this.errorMessage = '';
@@ -389,7 +391,7 @@ export default {
         }
 
         const response = await axios.post('/api/suppliers', this.form);
-        
+
         if (response.data.success) {
           this.$emit('created', response.data.supplier);
           this.closeModal();

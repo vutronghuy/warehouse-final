@@ -9,7 +9,7 @@
       <header class="bg-white border-b border-gray-200 px-6 py-4">
         <div class="flex items-center justify-between">
           <div>
-            <h1 class="text-lg font-medium text-gray-900">Supplier Management</h1>
+            <h1 class="text-lg font-medium text-gray-900">Product Management</h1>
           </div>
 
           <div class="flex items-center gap-4">
@@ -52,7 +52,7 @@
       <main class="flex-1 overflow-auto bg-gray-50 p-8">
         <!-- Page Header -->
         <div class="flex items-center justify-between mb-8">
-          <h2 class="text-3xl font-bold text-gray-900">Supplier Management</h2>
+          <h2 class="text-3xl font-bold text-gray-900">Product Management</h2>
           <button
             @click="showCreateModal = true"
             class="inline-flex items-center px-4 py-2.5 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-150"
@@ -60,7 +60,7 @@
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            Add Supplier
+            Add Product
           </button>
         </div>
 
@@ -75,7 +75,7 @@
             <input
               v-model="search"
               type="text"
-              placeholder="Search suppliers..."
+              placeholder="Search products..."
               class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-colors duration-150"
             />
           </div>
@@ -86,51 +86,53 @@
               class="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Status</option>
-              <option value="cooperation">Cooperation</option>
-              <option value="stop cooperation">Stop Cooperation</option>
+              <option value="in stock">in stock</option>
+              <option value="out of stock">out of stock</option>
             </select>
 
             <select
-              v-model="businessTypeFilter"
+              v-model="categoryFilter"
               class="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="">All Types</option>
-              <option value="manufacturer">Manufacturer</option>
-              <option value="distributor">Distributor</option>
-              <option value="retailer">Retailer</option>
-              <option value="wholesaler">Wholesaler</option>
+              <option value="">All Categories</option>
+              <option v-for="category in categories" :key="category._id" :value="category._id">
+                {{ category.name }}
+              </option>
             </select>
           </div>
         </div>
 
-        <!-- Suppliers Table -->
+        <!-- Products Table -->
         <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
           <div v-if="isLoading" class="flex justify-center items-center py-12">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
 
-          <div v-else-if="paginatedSuppliers.length === 0" class="text-center py-12">
+          <div v-else-if="paginatedProducts.length === 0" class="text-center py-12">
             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8l-4 4m0 0l-4-4m4 4V3" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No suppliers found</h3>
-            <p class="mt-1 text-sm text-gray-500">Get started by creating a new supplier.</p>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No products found</h3>
+            <p class="mt-1 text-sm text-gray-500">Get started by creating a new product.</p>
           </div>
 
           <table v-else class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Supplier
+                  Product
                 </th>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Contact
+                  SKU
                 </th>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Business Type
+                  Category
                 </th>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Payment Terms
+                  Unit
+                </th>
+                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Base Price
                 </th>
                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Status
@@ -141,49 +143,48 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="supplier in paginatedSuppliers" :key="supplier._id" class="hover:bg-gray-50">
+              <tr v-for="product in paginatedProducts" :key="product._id" class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div>
-                    <div class="text-sm font-medium text-gray-900">{{ supplier.name }}</div>
-                    <div class="text-sm text-gray-500">{{ supplier.code }}</div>
+                    <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
+
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <div>
-                    <div class="text-sm text-gray-900">{{ supplier.contactInfo?.email || 'N/A' }}</div>
-                    <div class="text-sm text-gray-500">{{ supplier.contactInfo?.phone || 'N/A' }}</div>
-                  </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize"
-                        :class="getBusinessTypeClass(supplier.businessInfo?.businessType)">
-                    {{ supplier.businessInfo?.businessType || 'N/A' }}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    {{ product.sku }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ formatPaymentTerms(supplier.paymentTerms) }}
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="text-sm text-gray-900">{{ getCategoryName(product.categoryId) }}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="text-sm text-gray-900">{{ product.unit }}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="text-sm text-gray-900">${{ product.basePrice.toFixed(2) }}</span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                        :class="getStatusClass(supplier.status)">
-                    {{ supplier.status }}
+                        :class="getStatusClass(product.status)">
+                    {{ product.status }}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div class="flex items-center justify-end space-x-2">
                     <button
-                      @click="openEditModal(supplier)"
+                      @click="openEditModal(product)"
                       class="text-blue-600 hover:text-blue-900 transition-colors"
-                      title="Edit supplier"
+                      title="Edit product"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button
-                      @click="deleteSupplier(supplier._id, supplier.name)"
+                      @click="deleteProduct(product._id, product.name)"
                       class="text-red-600 hover:text-red-900 transition-colors"
-                      title="Delete supplier"
+                      title="Delete product"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -198,8 +199,8 @@
           <!-- Pagination -->
           <div class="px-6 py-4 bg-white border-t flex items-center justify-between">
             <div class="text-sm text-gray-600">
-              Showing <span class="font-medium">{{ paginatedSuppliers.length }}</span> of
-              <span class="font-medium">{{ filteredSuppliers.length }}</span> suppliers
+              Showing <span class="font-medium">{{ paginatedProducts.length }}</span> of
+              <span class="font-medium">{{ filteredProducts.length }}</span> products
             </div>
 
             <div class="flex items-center space-x-2">
@@ -241,18 +242,18 @@
     </div>
 
     <!-- Create Modal -->
-    <CreateSupplierModal
+    <CreateProductModal
       :show="showCreateModal"
       @close="showCreateModal = false"
-      @created="handleSupplierCreated"
+      @created="handleProductCreated"
     />
 
     <!-- Edit Modal -->
-    <EditSupplierModal
+    <EditProductModal
       :show="showEditModal"
-      :supplier="selectedSupplier"
+      :product="selectedProduct"
       @close="closeEditModal"
-      @updated="handleSupplierUpdated"
+      @updated="handleProductUpdated"
     />
   </div>
 </template>
@@ -260,26 +261,27 @@
 <script>
 import axios from 'axios';
 import Sidebar from '../Sidebar.vue';
-import CreateSupplierModal from './CreateSupplierModal.vue';
-import EditSupplierModal from './EditSupplierModal.vue';
+import CreateProductModal from './CreateProductModal.vue';
+import EditProductModal from './EditProductModal.vue';
 
 export default {
-  name: 'SupplierTable',
+  name: 'ProductTable',
   components: {
     Sidebar,
-    CreateSupplierModal,
-    EditSupplierModal
+    CreateProductModal,
+    EditProductModal
   },
   data() {
     return {
-      suppliers: [],
+      products: [],
+      categories: [],
       search: '',
       statusFilter: '',
-      businessTypeFilter: '',
+      categoryFilter: '',
       isLoading: false,
       showCreateModal: false,
       showEditModal: false,
-      selectedSupplier: null,
+      selectedProduct: null,
       currentPage: 1,
       pageSize: 10,
       showUserMenu: false,
@@ -287,38 +289,36 @@ export default {
     };
   },
   computed: {
-    filteredSuppliers() {
-      let filtered = this.suppliers;
+    filteredProducts() {
+      let filtered = this.products;
 
       // Search filter
       if (this.search.trim()) {
         const searchTerm = this.search.toLowerCase();
-        filtered = filtered.filter(supplier =>
-          supplier.name.toLowerCase().includes(searchTerm) ||
-          supplier.code.toLowerCase().includes(searchTerm) ||
-          supplier.contactInfo?.email?.toLowerCase().includes(searchTerm) ||
-          supplier.contactInfo?.phone?.includes(searchTerm)
+        filtered = filtered.filter(product =>
+          product.name.toLowerCase().includes(searchTerm) ||
+          product.sku.toLowerCase().includes(searchTerm)
         );
       }
 
       // Status filter
       if (this.statusFilter) {
-        filtered = filtered.filter(supplier => supplier.status === this.statusFilter);
+        filtered = filtered.filter(product => product.status === this.statusFilter);
       }
 
-      // Business type filter
-      if (this.businessTypeFilter) {
-        filtered = filtered.filter(supplier => supplier.businessInfo?.businessType === this.businessTypeFilter);
+      // Category filter
+      if (this.categoryFilter) {
+        filtered = filtered.filter(product => product.categoryId === this.categoryFilter);
       }
 
-      return filtered;
+      return filtered.sort((a, b) => a.name.localeCompare(b.name));
     },
     totalPages() {
-      return Math.max(1, Math.ceil(this.filteredSuppliers.length / this.pageSize));
+      return Math.max(1, Math.ceil(this.filteredProducts.length / this.pageSize));
     },
-    paginatedSuppliers() {
+    paginatedProducts() {
       const start = (this.currentPage - 1) * this.pageSize;
-      return this.filteredSuppliers.slice(start, start + this.pageSize);
+      return this.filteredProducts.slice(start, start + this.pageSize);
     },
     visiblePages() {
       const pages = [];
@@ -374,7 +374,7 @@ export default {
     statusFilter() {
       this.currentPage = 1;
     },
-    businessTypeFilter() {
+    categoryFilter() {
       this.currentPage = 1;
     }
   },
@@ -394,7 +394,8 @@ export default {
       this.currentUserObj = null;
     }
 
-    await this.fetchSuppliers();
+    await this.fetchProducts();
+    await this.fetchCategories();
   },
   methods: {
     _loadUserFromStorage() {
@@ -418,7 +419,7 @@ export default {
       // Redirect to login
       this.$router.push('/login');
     },
-    async fetchSuppliers() {
+    async fetchProducts() {
       this.isLoading = true;
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -426,29 +427,10 @@ export default {
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
 
-        // Add cache-busting parameters and headers to prevent 304 Not Modified
-        const config = {
-          params: {
-            _t: Date.now(), // Cache busting timestamp
-            _r: Math.random() // Additional randomness
-          },
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'If-None-Match': '', // Prevent ETag matching
-            'If-Modified-Since': '' // Prevent Last-Modified matching
-          }
-        };
-
-        console.log('🔄 Fetching suppliers with cache-busting...');
-        const response = await axios.get('/api/suppliers', config);
-
-        console.log('📊 Suppliers response status:', response.status);
-        this.suppliers = response.data.suppliers || response.data || [];
-        console.log('✅ Suppliers loaded:', this.suppliers.length);
+        const response = await axios.get('/api/products');
+        this.products = response.data.products || response.data || [];
       } catch (error) {
-        console.error('Error fetching suppliers:', error);
+        console.error('Error fetching products:', error);
         if (error.response?.status === 401) {
           this.$router.push('/login');
         }
@@ -456,23 +438,59 @@ export default {
         this.isLoading = false;
       }
     },
-    openEditModal(supplier) {
-      this.selectedSupplier = JSON.parse(JSON.stringify(supplier));
+    async fetchCategories() {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await axios.get('/api/categories');
+        this.categories = response.data.categories || response.data || [];
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    },
+    getCategoryName(categoryData) {
+      // Handle both populated and non-populated category
+      if (typeof categoryData === 'object' && categoryData !== null) {
+        // Category is populated from backend
+        return categoryData.name || 'Unknown';
+      } else if (typeof categoryData === 'string') {
+        // Category is just ID, find in local categories array
+        const category = this.categories.find(cat => cat._id === categoryData);
+        return category ? category.name : 'Unknown';
+      }
+      return 'Unknown';
+    },
+    getSupplierName(supplierData) {
+      // Handle both populated and non-populated supplier
+      if (typeof supplierData === 'object' && supplierData !== null) {
+        // Supplier is populated from backend
+        return supplierData.name || 'Unknown';
+      } else if (typeof supplierData === 'string') {
+        // Supplier is just ID, would need to fetch from API or store in component
+        return 'Unknown';
+      }
+      return 'Unknown';
+    },
+    openEditModal(product) {
+      this.selectedProduct = JSON.parse(JSON.stringify(product));
       this.showEditModal = true;
     },
     closeEditModal() {
       this.showEditModal = false;
-      this.selectedSupplier = null;
+      this.selectedProduct = null;
     },
-    async handleSupplierCreated(newSupplier) {
-      await this.fetchSuppliers();
+    async handleProductCreated(newProduct) {
+      await this.fetchProducts();
     },
-    async handleSupplierUpdated(updatedSupplier) {
-      await this.fetchSuppliers();
+    async handleProductUpdated(updatedProduct) {
+      await this.fetchProducts();
     },
-    async deleteSupplier(id, name = 'this supplier') {
-      // Enhanced confirmation dialog for permanent deletion
-      const confirmMessage = `⚠️ Are you sure you want to permanently delete supplier "${name}"?\n\n❌ This action cannot be undone!`;
+    async deleteProduct(id, name) {
+      // Simple confirmation dialog
+      const confirmMessage = `⚠️ Are you sure you want to permanently delete product "${name}"?\n\n❌ This action cannot be undone!`;
 
       if (!confirm(confirmMessage)) {
         return;
@@ -484,29 +502,20 @@ export default {
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
 
-        console.log(`🗑️ Permanently deleting supplier: ${name} (ID: ${id})`);
+        console.log(`🗑️ Permanently deleting product: ${name} (ID: ${id})`);
 
-        const response = await axios.delete(`/api/suppliers/${id}`);
+        const response = await axios.delete(`/api/products/${id}`);
 
         if (response.data.success) {
-          console.log('✅ Supplier permanently deleted');
-          alert(`✅ Supplier "${name}" has been permanently deleted.`);
-
-          // Force refresh with multiple strategies
-          console.log('🔄 Force refreshing suppliers list...');
-          await this.fetchSuppliers();
-
-          // Additional refresh after short delay to ensure data is updated
-          setTimeout(async () => {
-            await this.fetchSuppliers();
-            console.log('🔄 Secondary refresh completed');
-          }, 500);
+          console.log('✅ Product permanently deleted:', response.data.deletedProduct);
+          alert(`✅ Product "${name}" has been permanently deleted.`);
+          await this.fetchProducts();
         } else {
           throw new Error(response.data.message || 'Delete failed');
         }
       } catch (error) {
-        console.error('Error deleting supplier:', error);
-        const errorMessage = error.response?.data?.message || 'Failed to delete supplier. Please try again.';
+        console.error('Error deleting product:', error);
+        const errorMessage = error.response?.data?.message || 'Failed to delete product. Please try again.';
         alert(`❌ Delete failed: ${errorMessage}`);
       }
     },
@@ -527,42 +536,12 @@ export default {
     },
     getStatusClass(status) {
       switch (status) {
-        case 'cooperation':
+        case 'in stock':
           return 'bg-green-100 text-green-800';
-        case 'stop cooperation':
-          return 'bg-red-100 text-red-800';
+        case 'out of stock':
+          return 'bg-gray-100 text-gray-800';
         default:
           return 'bg-gray-100 text-gray-800';
-      }
-    },
-    getBusinessTypeClass(type) {
-      switch (type) {
-        case 'manufacturer':
-          return 'bg-blue-100 text-blue-800';
-        case 'distributor':
-          return 'bg-green-100 text-green-800';
-        case 'retailer':
-          return 'bg-purple-100 text-purple-800';
-        case 'wholesaler':
-          return 'bg-orange-100 text-orange-800';
-        default:
-          return 'bg-gray-100 text-gray-800';
-      }
-    },
-    formatPaymentTerms(terms) {
-      switch (terms) {
-        case 'cash':
-          return 'Cash';
-        case 'net15':
-          return 'Net 15';
-        case 'net30':
-          return 'Net 30';
-        case 'net45':
-          return 'Net 45';
-        case 'net60':
-          return 'Net 60';
-        default:
-          return terms || 'N/A';
       }
     }
   }

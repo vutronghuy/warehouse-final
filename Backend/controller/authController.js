@@ -140,46 +140,112 @@ exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ ok: false, message: 'Email is required.' });
 
-    // find user by email across roles
+    // Clean and validate email format
+    const cleanEmail = email.toString().trim().toLowerCase();
+    console.log(`🔍 Searching for email: "${cleanEmail}" (original: "${email}")`);
+
+    // Enhanced email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ ok: false, message: 'Email format không hợp lệ.' });
+    }
+
+    // find user by email across roles (case-insensitive)
     const user = await User.findOne({
       $or: [
-        { 'admin.email': email },
-        { 'manager.email': email },
-        { 'staff.email': email },
-        { 'accounter.email': email }
+        { 'admin.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
+        { 'manager.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
+        { 'staff.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
+        { 'accounter.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } }
       ]
     });
+
+    console.log(`📋 User search result: ${user ? 'Found' : 'Not found'}`);
+
     if (!user) {
+      console.log(`❌ Email not found in database: "${cleanEmail}"`);
+
+      // Debug: Show available emails (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        const allUsers = await User.find({}).limit(5);
+        console.log('📧 Available emails in database:');
+        allUsers.forEach(u => {
+          if (u.admin?.email) console.log(`  Admin: ${u.admin.email}`);
+          if (u.manager?.email) console.log(`  Manager: ${u.manager.email}`);
+          if (u.staff?.email) console.log(`  Staff: ${u.staff.email}`);
+          if (u.accounter?.email) console.log(`  Accounter: ${u.accounter.email}`);
+        });
+      }
+
       // For security you may return 200 here so attackers can't enumerate emails.
       return res.status(404).json({ ok: false, message: 'Email không tồn tại trong hệ thống.' });
     }
 
-    // determine roleKey and sub doc
-    const roleKey = user.admin?.email === email ? 'admin'
-                   : user.manager?.email === email ? 'manager'
-                   : user.staff?.email === email ? 'staff'
-                   : user.accounter?.email === email ? 'accounter'
+    console.log(`✅ User found: ID ${user._id}, Role: ${user.role}`);
+
+    // determine roleKey and sub doc (case-insensitive)
+    const roleKey = user.admin?.email?.toLowerCase() === cleanEmail ? 'admin'
+                   : user.manager?.email?.toLowerCase() === cleanEmail ? 'manager'
+                   : user.staff?.email?.toLowerCase() === cleanEmail ? 'staff'
+                   : user.accounter?.email?.toLowerCase() === cleanEmail ? 'accounter'
                    : null;
+
+    console.log(`🎯 Determined roleKey: ${roleKey}`);
     if (!roleKey) return res.status(400).json({ ok: false, message: 'Không xác định được vai trò user.' });
 
     // generate 6-digit OTP
     const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
+    console.log(`🔐 GENERATED OTP for ${cleanEmail}: "${otp}"`);
+    console.log(`📊 OTP Generation Details:`);
+    console.log(`   OTP value: "${otp}"`);
+    console.log(`   OTP type: ${typeof otp}`);
+    console.log(`   OTP length: ${otp.length}`);
+    console.log(`   OTP chars: ${otp.split('').join(', ')}`);
+
     const otpHash = await bcrypt.hash(otp, 10);
+    console.log(`🔒 OTP hashed: ${otpHash}`);
+
+    // Test hash immediately after creation
+    const immediateTest = await bcrypt.compare(otp, otpHash);
+    console.log(`🧪 Immediate hash test: ${immediateTest} (should be true)`);
+
     const otpExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    console.log(`⏰ OTP expires at: ${otpExpires}`);
 
     // save request (use field names matching PasswordResetRequest model)
     const resetReq = await PasswordResetRequest.create({
       userId: user._id,
       roleKey: roleKey,
-      email: email,
+      email: cleanEmail, // Use cleaned email for consistency
       otpHash,
       expiresAt: otpExpires
     });
 
+    console.log(`💾 Reset request saved: ID ${resetReq._id}`);
+    console.log(`🔐 SAVED HASH: ${otpHash}`);
+    console.log(`📧 SAVED EMAIL: ${cleanEmail}`);
+    console.log(`⏰ SAVED EXPIRES: ${otpExpires}`);
+
+    // CRITICAL: Test the hash immediately after saving
+    console.log(`\n🧪 IMMEDIATE VERIFICATION TEST AFTER SAVE:`);
+    const saveTest = await bcrypt.compare(otp, otpHash);
+    console.log(`   Original OTP "${otp}" vs Saved Hash: ${saveTest}`);
+
+    // Test wrong OTP immediately
+    const wrongTest = await bcrypt.compare('000000', otpHash);
+    console.log(`   Wrong OTP "000000" vs Saved Hash: ${wrongTest}`);
+
+    if (!saveTest) {
+      console.log(`🚨 CRITICAL ERROR: Save test failed!`);
+    }
+    if (wrongTest) {
+      console.log(`🚨 CRITICAL ERROR: Wrong OTP test passed!`);
+    }
+
     // Check if email is configured
     const isEmailConfigured = process.env.SMTP_USER && process.env.SMTP_PASS &&
-                              process.env.SMTP_USER !== 'your-email@gmail.com' &&
-                              process.env.SMTP_PASS !== 'your-16-character-app-password-here';
+                              process.env.SMTP_USER &&
+                              process.env.SMTP_PASS;
 
     if (isEmailConfigured) {
       // send email with OTP via nodemailer (using SMTP env)
@@ -286,24 +352,122 @@ HinWarehouse System
 exports.verifyOtpAndReset = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
+
+    // Enhanced validation
     if (!email || !otp || !newPassword) {
       return res.status(400).json({ ok: false, message: 'email, otp và newPassword là bắt buộc.' });
     }
 
-    // find latest matching reset request (not used, not expired)
+    // Clean and validate inputs - CRITICAL: ensure OTP is string for bcrypt
+    const cleanEmail = email.toString().trim().toLowerCase();
+    const cleanOtp = String(otp).trim(); // Force convert to string to avoid bcrypt error
+    console.log(`🔧 OTP conversion: ${otp} (${typeof otp}) → "${cleanOtp}" (${typeof cleanOtp})`);
+
+    if (!/^\d{6}$/.test(cleanOtp)) {
+      console.log(`❌ Invalid OTP format: "${cleanOtp}" (length: ${cleanOtp.length})`);
+      return res.status(400).json({ ok: false, message: 'OTP phải là 6 chữ số.' });
+    }
+
+    console.log(`🔍 Verifying OTP for email: ${cleanEmail}`);
+    console.log(`📝 Received OTP: "${cleanOtp}" (type: ${typeof cleanOtp})`);
+
+    // CRITICAL DEBUG: Check all reset requests first
+    console.log(`\n🔍 CHECKING ALL RESET REQUESTS FOR EMAIL: ${cleanEmail}`);
+    const allResetReqs = await PasswordResetRequest.find({
+      email: { $regex: new RegExp(`^${cleanEmail}$`, 'i') }
+    }).sort({ createdAt: -1 });
+
+    console.log(`📊 Found ${allResetReqs.length} total reset requests:`);
+    allResetReqs.forEach((req, index) => {
+      console.log(`   ${index + 1}. ID: ${req._id}`);
+      console.log(`      Created: ${req.createdAt}`);
+      console.log(`      Expires: ${req.expiresAt}`);
+      console.log(`      Used: ${req.used}`);
+      console.log(`      Hash: ${req.otpHash.substring(0, 20)}...`);
+      console.log(`      Valid: ${req.expiresAt > new Date() && !req.used}`);
+    });
+
+    // find latest matching reset request (not used, not expired) - case insensitive
     const resetReq = await PasswordResetRequest.findOne({
-      email: email,
+      email: { $regex: new RegExp(`^${cleanEmail}$`, 'i') },
       expiresAt: { $gt: new Date() },
       used: false
     }).sort({ createdAt: -1 });
 
-    if (!resetReq) return res.status(400).json({ ok: false, message: 'Không tìm thấy yêu cầu đặt lại mật khẩu hợp lệ hoặc đã hết hạn.' });
-
-    // compare otp
-    const match = await bcrypt.compare(otp, resetReq.otpHash);
-    if (!match) {
-      return res.status(400).json({ ok: false, message: 'OTP không đúng.' });
+    console.log(`\n🎯 SELECTED RESET REQUEST: ${resetReq ? resetReq._id : 'NONE'}`);
+    if (resetReq) {
+      console.log(`   This is request #${allResetReqs.findIndex(r => r._id.equals(resetReq._id)) + 1} from the list above`);
     }
+
+    if (!resetReq) {
+      console.log(`❌ No valid reset request found for email: ${email}`);
+      return res.status(400).json({ ok: false, message: 'Không tìm thấy yêu cầu đặt lại mật khẩu hợp lệ hoặc đã hết hạn.' });
+    }
+
+    console.log(`📋 Found reset request: ID ${resetReq._id}, created: ${resetReq.createdAt}`);
+    console.log(`⏰ Expires at: ${resetReq.expiresAt}, Current time: ${new Date()}`);
+
+    // CRITICAL DEBUG: Compare OTP with extreme detail
+    console.log(`\n� CRITICAL OTP VERIFICATION SECTION 🚨`);
+    console.log(`� Email: ${cleanEmail}`);
+    console.log(`📝 User Input OTP: "${cleanOtp}"`);
+    console.log(`🔐 Stored Hash: ${resetReq.otpHash}`);
+    console.log(`📋 Reset Request ID: ${resetReq._id}`);
+    console.log(`⏰ Created: ${resetReq.createdAt}`);
+    console.log(`⏰ Expires: ${resetReq.expiresAt}`);
+    console.log(`🔄 Used: ${resetReq.used}`);
+
+    console.log(`\n🧪 PERFORMING BCRYPT COMPARISON...`);
+    console.log(`bcrypt.compare("${cleanOtp}", "${resetReq.otpHash}")`);
+
+    const match = await bcrypt.compare(cleanOtp, resetReq.otpHash);
+
+    console.log(`\n🎯 BCRYPT RESULT: ${match}`);
+    console.log(`🎯 BCRYPT RESULT TYPE: ${typeof match}`);
+    console.log(`🎯 BCRYPT RESULT === true: ${match === true}`);
+    console.log(`🎯 BCRYPT RESULT == true: ${match == true}`);
+
+    // FORCE CHECK: Manually verify the logic
+    if (match === true) {
+      console.log(`✅ MATCH IS TRUE - OTP IS CORRECT`);
+    } else if (match === false) {
+      console.log(`❌ MATCH IS FALSE - OTP IS INCORRECT`);
+    } else {
+      console.log(`⚠️ UNEXPECTED MATCH VALUE: ${match} (${typeof match})`);
+    }
+
+    // Test the condition explicitly
+    console.log(`\n🔍 TESTING CONDITION: !match`);
+    console.log(`!match = ${!match}`);
+    console.log(`!match === true: ${!match === true}`);
+
+    if (!match) {
+      console.log(`\n❌ ENTERING FAILURE BLOCK - OTP VERIFICATION FAILED!`);
+      console.log(`📝 User input: "${cleanOtp}"`);
+      console.log(`🔐 Expected hash: ${resetReq.otpHash}`);
+
+      // Test with some common variations to debug
+      console.log(`\n🧪 Testing variations:`);
+      const variations = [
+        cleanOtp,
+        cleanOtp.toString(),
+        String(cleanOtp),
+        cleanOtp.padStart(6, '0'),
+        cleanOtp.replace(/\s/g, '')
+      ];
+
+      for (const variation of variations) {
+        const testMatch = await bcrypt.compare(variation, resetReq.otpHash);
+        console.log(`   "${variation}" → ${testMatch}`);
+      }
+
+      console.log(`\n🚫 RETURNING ERROR RESPONSE`);
+      return res.status(400).json({ ok: false, message: 'OTP không đúng.' });
+    } else {
+      console.log(`\n✅ BYPASSING FAILURE BLOCK - CONTINUING TO SUCCESS`);
+    }
+
+    console.log(`✅ OTP verified successfully for email: ${email}`);
 
     // find user and update password for correct subdoc
     const user = await User.findById(resetReq.userId);
@@ -330,6 +494,65 @@ exports.verifyOtpAndReset = async (req, res) => {
     return res.json({ ok: true, message: 'Mật khẩu đã được cập nhật.' });
   } catch (err) {
     console.error('verifyOtpAndReset error:', err);
+    return res.status(500).json({ ok: false, message: 'Lỗi server.' });
+  }
+};
+
+// VERIFY OTP ONLY (separate endpoint for testing OTP before password reset)
+exports.verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ ok: false, message: 'Email và OTP là bắt buộc.' });
+    }
+
+    // Clean and validate inputs - CRITICAL: ensure OTP is string for bcrypt
+    const cleanEmail = email.toString().trim().toLowerCase();
+    const cleanOtp = String(otp).trim(); // Force convert to string to avoid bcrypt error
+    console.log(`🔧 OTP conversion: ${otp} (${typeof otp}) → "${cleanOtp}" (${typeof cleanOtp})`);
+
+    if (!/^\d{6}$/.test(cleanOtp)) {
+      console.log(`❌ Invalid OTP format: "${cleanOtp}" (length: ${cleanOtp.length})`);
+      return res.status(400).json({ ok: false, message: 'OTP phải là 6 chữ số.' });
+    }
+
+    console.log(`🔍 Verifying OTP only for email: ${cleanEmail}`);
+    console.log(`📝 Received OTP: "${cleanOtp}"`);
+
+    // Find latest matching reset request (not used, not expired) - case insensitive
+    const resetReq = await PasswordResetRequest.findOne({
+      email: { $regex: new RegExp(`^${cleanEmail}$`, 'i') },
+      expiresAt: { $gt: new Date() },
+      used: false
+    }).sort({ createdAt: -1 });
+
+    if (!resetReq) {
+      console.log(`❌ No valid reset request found for email: ${email}`);
+      return res.status(400).json({ ok: false, message: 'Không tìm thấy yêu cầu đặt lại mật khẩu hợp lệ hoặc đã hết hạn.' });
+    }
+
+    console.log(`📋 Found reset request: ID ${resetReq._id}`);
+
+    // Compare OTP
+    const match = await bcrypt.compare(cleanOtp, resetReq.otpHash);
+    console.log(`✅ OTP verification result: ${match}`);
+
+    if (!match) {
+      console.log(`❌ OTP verification failed for email: ${email}`);
+      return res.status(400).json({ ok: false, message: 'OTP không đúng.' });
+    }
+
+    console.log(`✅ OTP verified successfully for email: ${email}`);
+
+    // Return success but don't mark as used yet
+    return res.json({
+      ok: true,
+      message: 'OTP hợp lệ. Bạn có thể tiếp tục đặt lại mật khẩu.',
+      requestId: resetReq._id
+    });
+  } catch (err) {
+    console.error('verifyOtp error:', err);
     return res.status(500).json({ ok: false, message: 'Lỗi server.' });
   }
 };

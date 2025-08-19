@@ -77,8 +77,8 @@ const supplierSchema = new Schema(
     // Status
     status: {
       type: String,
-      enum: ["active", "inactive", "blacklisted"],
-      default: "active",
+      enum: ["cooperation", "stop cooperation"],
+      default: "cooperation",
     },
     
     // Notes
@@ -124,7 +124,7 @@ supplierSchema.virtual('productsCount', {
 
 // Static methods
 supplierSchema.statics.getActiveSuppliers = function() {
-  return this.find({ status: 'active', deletedAt: null })
+  return this.find({ status: 'cooperation', deletedAt: null })
     .sort({ name: 1 });
 };
 

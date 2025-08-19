@@ -17,7 +17,7 @@
         <!-- Email Info -->
         <div class="mb-6">
           <p class="text-gray-600 text-sm mb-2">Mã xác minh đã được gửi đến Email</p>
-          <p class="text-gray-800 font-medium">{{ email }}</p>
+          <p class="text-gray-800 font-medium break-words">{{ email }}</p>
         </div>
       </div>
 
@@ -27,12 +27,16 @@
           v-for="(digit, index) in otpDigits"
           :key="index"
           :ref="el => otpInputs[index] = el"
-          v-model="otpDigits[index]"
+          :value="otpDigits[index]"
           @input="handleInput(index, $event)"
           @keydown="handleKeydown(index, $event)"
           @paste="handlePaste($event)"
           type="text"
           maxlength="1"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          :aria-label="`Mã xác nhận chữ số ${index + 1}`"
+          pattern="[0-9]*"
           class="w-12 h-12 text-center text-xl font-semibold border-2 border-gray-300 rounded-lg focus:border-red-400 focus:outline-none transition-colors bg-gray-50"
         />
       </div>
@@ -47,7 +51,8 @@
             Không nhận được mã?
             <button
               @click="resendCode"
-              class="text-red-400 hover:text-red-500 font-medium ml-1"
+              :disabled="isLoading || timeLeft > 0"
+              class="text-red-400 hover:text-red-500 font-medium ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Gửi lại
             </button>
@@ -102,31 +107,31 @@ export default {
     }
   },
   mounted() {
-    // Get email from session storage
     this.email = sessionStorage.getItem('resetEmail') || '';
     if (!this.email) {
       this.$router.push('/forgot/email');
       return;
     }
 
+    this.$nextTick(() => {
+      // focus first input if exists
+      if (this.otpInputs[0]) this.otpInputs[0].focus();
+    });
+
     this.startTimer();
-    // Focus on first input
-    if (this.otpInputs[0]) {
-      this.otpInputs[0].focus();
-    }
   },
   computed: {
     isOTPComplete() {
-      return this.otpDigits.every(digit => digit !== '' && /^\d$/.test(digit));
+      return this.otpDigits.every(d => d !== '' && /^\d$/.test(d));
     },
     otpCode() {
       return this.otpDigits.join('');
     }
   },
-
   beforeUnmount() {
     if (this.timer) {
       clearInterval(this.timer);
+      this.timer = null;
     }
   },
   methods: {
@@ -134,61 +139,104 @@ export default {
       this.$router.push('/forgot/email');
     },
 
+    // Main handler: set single digit and auto-jump to next
     handleInput(index, event) {
-      const value = event.target.value;
-
-      // Only allow digits
-      if (value && !/^\d$/.test(value)) {
-        this.otpDigits[index] = '';
+      let raw = event.target.value || '';
+      // keep only digits
+      raw = raw.replace(/\D/g, '');
+      if (!raw) {
+        // clear current
+        this.otpDigits.splice(index, 1, '');
         return;
       }
 
-      this.otpDigits[index] = value;
+      // Take only the last digit typed/pasted into this input
+      const char = raw.slice(-1);
+
+      // update reactive array (works in Vue2 & Vue3)
+      this.otpDigits.splice(index, 1, char);
+
+      // update the visible input value explicitly (in case v-model not used)
+      if (this.otpInputs[index]) this.otpInputs[index].value = char;
+
       this.clearMessages();
 
-      // Auto focus next input
-      if (value && index < 5) {
-        this.otpInputs[index + 1]?.focus();
+      // Auto-focus next input if exists
+      if (index < this.otpDigits.length - 1) {
+        // small timeout to ensure DOM is updated
+        setTimeout(() => {
+          this.otpInputs[index + 1]?.focus();
+          // select content (helpful on mobile)
+          if (this.otpInputs[index + 1]) this.otpInputs[index + 1].select?.();
+        }, 0);
+      } else {
+        // last input: optionally blur or keep focus
+        // this.otpInputs[index]?.blur();
       }
     },
 
     handleKeydown(index, event) {
-      // Handle backspace
-      if (event.key === 'Backspace') {
-        if (!this.otpDigits[index] && index > 0) {
+      const key = event.key;
+
+      if (key === 'Backspace') {
+        event.preventDefault();
+        // if current has value, clear it
+        if (this.otpDigits[index]) {
+          this.otpDigits.splice(index, 1, '');
+          if (this.otpInputs[index]) this.otpInputs[index].value = '';
+          // keep focus on current (so user can type again)
+          this.otpInputs[index]?.focus();
+        } else if (index > 0) {
+          // move focus to previous and clear it
           this.otpInputs[index - 1]?.focus();
+          this.otpDigits.splice(index - 1, 1, '');
+          if (this.otpInputs[index - 1]) this.otpInputs[index - 1].value = '';
         }
-      }
-      // Handle arrow keys
-      else if (event.key === 'ArrowLeft' && index > 0) {
+        this.clearMessages();
+      } else if (key === 'ArrowLeft' && index > 0) {
         this.otpInputs[index - 1]?.focus();
-      }
-      else if (event.key === 'ArrowRight' && index < 5) {
+      } else if (key === 'ArrowRight' && index < this.otpDigits.length - 1) {
         this.otpInputs[index + 1]?.focus();
+      } else if (/^\d$/.test(key)) {
+        // allow the digit — but we handle input event to set and jump
+      } else {
+        // block other keys
+        // do nothing
       }
     },
 
     handlePaste(event) {
       event.preventDefault();
-      const paste = event.clipboardData.getData('text');
+      const paste = event.clipboardData.getData('text') || '';
       const digits = paste.replace(/\D/g, '').slice(0, 6);
 
       for (let i = 0; i < 6; i++) {
-        this.otpDigits[i] = digits[i] || '';
+        this.otpDigits.splice(i, 1, digits[i] || '');
+        if (this.otpInputs[i]) this.otpInputs[i].value = digits[i] || '';
       }
 
-      // Focus on the next empty input or last input
-      const nextEmpty = this.otpDigits.findIndex(digit => digit === '');
+      // Focus next empty or last
+      const nextEmpty = this.otpDigits.findIndex(d => d === '');
       const focusIndex = nextEmpty === -1 ? 5 : nextEmpty;
-      this.otpInputs[focusIndex]?.focus();
+      setTimeout(() => {
+        this.otpInputs[focusIndex]?.focus();
+      }, 0);
+      this.clearMessages();
     },
 
     startTimer() {
+      if (this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+      if (!this.timeLeft || this.timeLeft <= 0) this.timeLeft = 60;
+
       this.timer = setInterval(() => {
         if (this.timeLeft > 0) {
           this.timeLeft--;
         } else {
           clearInterval(this.timer);
+          this.timer = null;
         }
       }, 1000);
     },
@@ -198,51 +246,58 @@ export default {
         this.errorMessage = 'Email không hợp lệ';
         return;
       }
+      if (this.timeLeft > 0) return;
 
-      this.timeLeft = 30;
       this.clearMessages();
-      this.startTimer();
-
+      this.isLoading = true;
       try {
-        const response = await axios.post('/api/auth/forgot', {
-          email: this.email
-        });
-
-        if (response.data.ok) {
+        const res = await axios.post('/api/auth/forgot', { email: this.email });
+        if (res.data && res.data.ok) {
+          this.timeLeft = 60;
+          this.startTimer();
+          if (res.data.requestId) sessionStorage.setItem('resetRequestId', res.data.requestId);
           this.successMessage = 'Mã OTP đã được gửi lại!';
-          if (response.data.requestId) {
-            sessionStorage.setItem('resetRequestId', response.data.requestId);
-          }
-          setTimeout(() => {
-            this.successMessage = '';
-          }, 3000);
+          setTimeout(() => this.successMessage = '', 3000);
+        } else {
+          this.errorMessage = (res.data && res.data.message) || 'Không thể gửi mã OTP';
         }
-      } catch (error) {
-        console.error('Error resending OTP:', error);
-        this.errorMessage = 'Có lỗi khi gửi lại OTP. Vui lòng thử lại.';
+      } catch (err) {
+        console.error(err);
+        this.errorMessage = (err.response && err.response.data && err.response.data.message) || 'Có lỗi khi gửi lại OTP';
+      } finally {
+        this.isLoading = false;
       }
     },
 
     async verifyOTP() {
       if (!this.isOTPComplete) return;
-
       this.isLoading = true;
       this.clearMessages();
 
       try {
-        // Store OTP for next step (we'll verify it in the password reset step)
-        sessionStorage.setItem('resetOTP', this.otpCode);
+        const res = await axios.post('/api/auth/forgot/verify-otp', {
+          email: this.email,
+          otp: this.otpCode
+        });
 
-        // For now, just proceed to password reset page
-        // The actual verification will happen when user submits new password
-        this.successMessage = 'Mã OTP hợp lệ!';
-        setTimeout(() => {
-          this.$router.push('/forgot/new-password');
-        }, 1500);
+        if (res.data && res.data.ok) {
+          // Lưu thông tin cần thiết vào sessionStorage
+          if (res.data.requestId) sessionStorage.setItem('resetRequestId', res.data.requestId);
+          sessionStorage.setItem('resetOTP', this.otpCode);
 
-      } catch (error) {
-        console.error('Error verifying OTP:', error);
-        this.errorMessage = 'Có lỗi xảy ra. Vui lòng thử lại.';
+          // Hiển thị thông báo thành công
+          this.successMessage = '✅ OTP hợp lệ! Đang chuyển tới trang đặt mật khẩu mới...';
+
+          // Chuyển trang sau 500ms (nhanh hơn để cải thiện UX)
+          setTimeout(() => {
+            this.$router.push('/forgot/new-password');
+          }, 500);
+        } else {
+          this.errorMessage = (res.data && res.data.message) || 'OTP không đúng hoặc đã hết hạn.';
+        }
+      } catch (err) {
+        console.error(err);
+        this.errorMessage = (err.response && err.response.data && err.response.data.message) || 'Có lỗi khi xác minh OTP';
       } finally {
         this.isLoading = false;
       }
@@ -262,12 +317,8 @@ export default {
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Custom input focus styles */

@@ -123,10 +123,12 @@
 
 <script>
 import axios from 'axios';
+import { notifyWarehouseUpdate } from '@/utils/warehouseUtils.js';
 axios.defaults.baseURL = 'http://localhost:3003';
 
 export default {
   name: 'EditUserModal',
+  emits: ['close', 'updated'],
   props: {
     show: { type: Boolean, required: true },
     user: { type: Object, default: null } // user object from server
@@ -209,8 +211,13 @@ export default {
     },
     async fetchWarehouses() {
       try {
-        const res = await axios.get('/warehouse');
-        const list = res.data.data || res.data.warehouses || [];
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await axios.get('/api/warehouses/active');
+        const list = res.data.warehouses || [];
         this.warehouses = Array.isArray(list) ? list : [];
       } catch (err) {
         console.error('Fetch warehouses error:', err);
@@ -251,7 +258,37 @@ export default {
         const userId = this.user?._id;
         if (!userId) throw new Error('Missing user id');
 
-        const { data } = await axios.put(`/user/${userId}`, payload);
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+
+        const { data } = await axios.put(`/api/users/${userId}`, payload);
+
+        // Notify warehouse updates - always notify to refresh staff info
+        const oldWarehouseId = this.getOriginalWarehouseId();
+        const newWarehouseId = this.getCurrentWarehouseId();
+
+        console.log('🔍 User update - Old warehouse:', oldWarehouseId);
+        console.log('🔍 User update - New warehouse:', newWarehouseId);
+
+        // If warehouse changed, notify both old and new
+        if (oldWarehouseId && oldWarehouseId !== newWarehouseId) {
+          console.log('🔄 Warehouse changed - notifying old warehouse:', oldWarehouseId);
+          notifyWarehouseUpdate(oldWarehouseId);
+        }
+
+        // Always notify current warehouse (even if just user info changed)
+        if (newWarehouseId) {
+          console.log('🔄 Notifying current warehouse:', newWarehouseId);
+          notifyWarehouseUpdate(newWarehouseId);
+        }
+
+        // If user info changed but warehouse stayed same, still notify
+        if (oldWarehouseId && oldWarehouseId === newWarehouseId) {
+          console.log('🔄 Same warehouse but user info changed - notifying:', oldWarehouseId);
+          notifyWarehouseUpdate(oldWarehouseId);
+        }
 
         this.$emit('updated', data.user || data);
 
@@ -262,6 +299,30 @@ export default {
       } finally {
         this.loading = false;
       }
+    },
+    getOriginalWarehouseId() {
+      if (!this.user) return null;
+
+      const role = this.user.role;
+      if (role === 'admin') {
+        return null; // Admin có thể quản lý nhiều warehouse
+      }
+
+      const roleData = this.user[role];
+      if (roleData && roleData.warehouseId) {
+        return typeof roleData.warehouseId === 'object'
+          ? roleData.warehouseId._id
+          : roleData.warehouseId;
+      }
+      return null;
+    },
+    getCurrentWarehouseId() {
+      const role = this.form.role;
+      if (role === 'admin') {
+        return null; // Admin có thể quản lý nhiều warehouse
+      }
+
+      return this.form[role]?.warehouseId || null;
     }
   }
 };

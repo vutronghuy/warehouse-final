@@ -4,6 +4,18 @@ const router = express.Router();
 const supplierController = require('../controller/SupplierController');
 const { verifyToken, requireSuperAdmin } = require('../middlewares/auth');
 
+// Cache-busting middleware to prevent 304 Not Modified
+const disableCache = (req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'ETag': '',
+    'Last-Modified': new Date().toUTCString()
+  });
+  next();
+};
+
 // Simple admin check middleware
 const requireAdminOrSuperAdmin = (req, res, next) => {
   if (!req.user) {
@@ -16,12 +28,12 @@ const requireAdminOrSuperAdmin = (req, res, next) => {
   next();
 };
 
-// Routes for supplier management
+// Routes for supplier management (with cache-busting)
 // GET /api/suppliers - Get all suppliers with pagination and filters
-router.get('/', verifyToken, supplierController.getAllSuppliers);
+router.get('/', disableCache, verifyToken, supplierController.getAllSuppliers);
 
 // GET /api/suppliers/:id - Get supplier by ID
-router.get('/:id', verifyToken, supplierController.getSupplierById);
+router.get('/:id', disableCache, verifyToken, supplierController.getSupplierById);
 
 // POST /api/suppliers - Create new supplier (Admin and Super Admin only)
 router.post('/', verifyToken, requireAdminOrSuperAdmin, supplierController.createSupplier);

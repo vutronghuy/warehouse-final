@@ -10,7 +10,10 @@ const PORT = process.env.PORT;
 
 //Route:
 const supplierRoute = require('./router/SupplierRoute');
-const warehouseRoute = require('./router/warehouseRoute');
+const categoryRoute = require('./router/CategoryRoute');
+const productRoute = require('./router/ProductRoute');
+const warehouseRoute = require('./router/WarehouseRouteNew');
+// const warehouseRoute = require('./router/warehouseRoute');
 const userRoute = require('./router/UserRoute');
 const authRoute = require('./router/authRoute');
 const exportRoute = require('./router/ExportRoute');
@@ -37,8 +40,18 @@ app.use(cors({
 
 //router
 app.use('/api/suppliers', supplierRoute)
-app.use('/warehouse', warehouseRoute)
-app.use('/user', userRoute)
+app.use('/api/categories', categoryRoute)
+app.use('/api/products', productRoute)
+app.use('/api/warehouses', warehouseRoute)
+
+// Debug middleware for /api/users
+app.use('/api/users', (req, res, next) => {
+  console.log(`🔍 API Users route hit: ${req.method} ${req.path}`);
+  console.log('📝 Headers:', req.headers);
+  next();
+});
+
+app.use('/api/users', userRoute)
 app.use('/api/auth', authRoute)
 app.use('/export', exportRoute)
 app.use('/import', importRoute)

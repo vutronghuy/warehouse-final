@@ -6,6 +6,9 @@ import NotFound from '@/modules/notFound/index.vue';
 import Admin_Super from '@/modules/Admin/admin_super/SuperAdmin.vue';
 import SuperAdminDashboard from '@/modules/Admin/admin_super/Dashboard.vue';
 import SupplierTable from '@/modules/Admin/admin_super/Supplier/SupplierTable.vue';
+import CategoryTable from '@/modules/Admin/admin_super/Category/CategoryTable.vue';
+import ProductTable from '@/modules/Admin/admin_super/Product/ProductTable.vue';
+import WarehouseTable from '@/modules/Admin/admin_super/Warehouse/WarehouseTable.vue';
 import Login from '@/modules/Auth/Login.vue';
 import Admin from '@/modules/Admin/Admin/Admin.vue';
 import Manager from '@/modules/User/manager.vue';
@@ -59,6 +62,27 @@ const routes: RouteRecordRaw[] = [
     path: '/Superadmin/suppliers',
     name: 'SuperAdminSuppliers',
     component: SupplierTable, // Trang CRUD suppliers
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireSuperAdmin,
+  },
+  {
+    path: '/Superadmin/categories',
+    name: 'SuperAdminCategories',
+    component: CategoryTable, // Trang CRUD categories
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireSuperAdmin,
+  },
+  {
+    path: '/Superadmin/products',
+    name: 'SuperAdminProducts',
+    component: ProductTable, // Trang CRUD products
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireSuperAdmin,
+  },
+  {
+    path: '/Superadmin/warehouses',
+    name: 'SuperAdminWarehouses',
+    component: WarehouseTable, // Trang CRUD warehouses
     meta: { layout: 'defaultNoHeader' },
     beforeEnter: requireSuperAdmin,
   },

@@ -39,6 +39,15 @@ exports.getAllSuppliers = async (req, res, next) => {
     // Get total count for pagination
     const total = await Supplier.countDocuments(filter);
 
+    // Set cache-busting headers to prevent 304 Not Modified
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'ETag': '', // Remove ETag
+      'Last-Modified': new Date().toUTCString() // Always fresh timestamp
+    });
+
     res.json({
       success: true,
       suppliers,
@@ -48,7 +57,8 @@ exports.getAllSuppliers = async (req, res, next) => {
         totalSuppliers: total,
         hasNext: skip + suppliers.length < total,
         hasPrev: parseInt(page) > 1
-      }
+      },
+      timestamp: Date.now() // Add timestamp for debugging
     });
   } catch (error) {
     console.error('Error fetching suppliers:', error);
@@ -77,9 +87,17 @@ exports.getSupplierById = async (req, res, next) => {
       });
     }
 
+    // Set cache-busting headers
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
     res.json({
       success: true,
-      supplier
+      supplier,
+      timestamp: Date.now()
     });
   } catch (error) {
     console.error('Error fetching supplier:', error);
@@ -213,7 +231,7 @@ exports.updateSupplier = async (req, res, next) => {
   }
 };
 
-// Delete supplier
+// Delete supplier (hard delete)
 exports.deleteSupplier = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -225,6 +243,7 @@ exports.deleteSupplier = async (req, res, next) => {
       });
     }
 
+    // Find supplier first to check if it exists
     const supplier = await Supplier.findById(id);
     if (!supplier) {
       return res.status(404).json({
@@ -233,11 +252,25 @@ exports.deleteSupplier = async (req, res, next) => {
       });
     }
 
-    await Supplier.findByIdAndDelete(id);
+    // Hard delete - permanently remove from database
+    const deletedSupplier = await Supplier.findByIdAndDelete(id);
+
+    if (!deletedSupplier) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supplier not found or already deleted'
+      });
+    }
+
+    console.log(`✅ Supplier permanently deleted: ${deletedSupplier.name} (ID: ${deletedSupplier._id})`);
 
     res.json({
       success: true,
-      message: 'Supplier deleted successfully'
+      message: 'Supplier permanently deleted from database',
+      deletedSupplier: {
+        id: deletedSupplier._id,
+        name: deletedSupplier.name
+      }
     });
   } catch (error) {
     console.error('Error deleting supplier:', error);

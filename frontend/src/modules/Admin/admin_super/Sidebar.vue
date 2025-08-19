@@ -1,7 +1,10 @@
 <template>
-  <aside class="w-80 bg-white shadow-sm border-r border-gray-200">
+  <aside class="w-70 bg-white shadow-sm border-r border-gray-200">
     <div class="p-6 border-b border-gray-100">
-      <h1 class="text-xl font-bold text-gray-800">Admin Panel</h1>
+      <div class="flex items-center space-x-3">
+        <img src="/img/logo.png" alt="" class="w-10 h-10 rounded-full" >
+        <h1 class="text-xl font-bold text-gray-800 mt-2">Admin Management</h1>
+      </div>
     </div>
 
     <!-- Navigation Section -->
@@ -46,13 +49,36 @@
         </router-link>
 
         <router-link
-          to="/admin/products"
-          class="flex items-center px-3 py-2.5 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150"
+          to="/Superadmin/categories"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          :class="$route.path === '/Superadmin/categories' ? 'text-orange-700 bg-orange-50' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'"
         >
-          <svg class="w-5 h-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 mr-3" :class="$route.path === '/Superadmin/categories' ? 'text-orange-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+          </svg>
+          Categories
+        </router-link>
+
+        <router-link
+          to="/Superadmin/products"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          :class="$route.path === '/Superadmin/products' ? 'text-purple-700 bg-purple-50' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'"
+        >
+          <svg class="w-5 h-5 mr-3" :class="$route.path === '/Superadmin/products' ? 'text-purple-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
           </svg>
           Products
+        </router-link>
+
+        <router-link
+          to="/Superadmin/warehouses"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          :class="$route.path === '/Superadmin/warehouses' ? 'text-indigo-700 bg-indigo-50' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'"
+        >
+          <svg class="w-5 h-5 mr-3" :class="$route.path === '/Superadmin/warehouses' ? 'text-indigo-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h4M9 7h6m-6 4h6m-6 4h6"/>
+          </svg>
+          Warehouses
         </router-link>
 
         <router-link

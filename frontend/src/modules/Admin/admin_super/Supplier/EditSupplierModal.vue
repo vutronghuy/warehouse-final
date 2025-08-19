@@ -262,9 +262,8 @@
                 v-model="form.status"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="suspended">Suspended</option>
+                <option value="cooperation">Cooperation</option>
+                <option value="stop cooperation">Stop Cooperation</option>
               </select>
             </div>
           </div>
@@ -357,7 +356,7 @@ export default {
           phone: ''
         },
         paymentTerms: 'net30',
-        status: 'active',
+        status: 'cooperation',
         notes: ''
       }
     };
@@ -403,7 +402,7 @@ export default {
           phone: supplier.contactPerson?.phone || ''
         },
         paymentTerms: supplier.paymentTerms || 'net30',
-        status: supplier.status || 'active',
+        status: supplier.status || 'cooperation',
         notes: supplier.notes || ''
       };
     },

@@ -217,6 +217,22 @@
 <script>
 import axios from 'axios';
 
+// Add axios interceptor to prevent caching for user endpoints
+axios.interceptors.request.use(config => {
+  // Add cache-busting headers for user-related requests
+  if (config.url && config.url.includes('/users')) {
+    config.headers['Cache-Control'] = 'no-cache';
+    config.headers['Pragma'] = 'no-cache';
+
+    // Add timestamp to URL if not already present
+    if (!config.url.includes('_t=')) {
+      const separator = config.url.includes('?') ? '&' : '?';
+      config.url += `${separator}_t=${Date.now()}`;
+    }
+  }
+  return config;
+});
+
 export default {
   name: 'AdminDashboard',
   data() {
@@ -369,11 +385,21 @@ export default {
         ) {
           const whIds = cur.admin.managedWarehouses.map((id) => String(id));
 
-          // fetch manager & staff lists in parallel using backend role filter
+          // fetch manager & staff lists in parallel using backend role filter with cache-busting
+          const cacheBuster = Date.now();
           const [mgrRes, staffRes, actRes] = await Promise.all([
-            axios.get('/user', { params: { role: 'manager' } }),
-            axios.get('/user', { params: { role: 'staff' } }),
-            axios.get('/user', { params: { role: 'accounter' } }),
+            axios.get('/api/users', {
+              params: { role: 'manager', _t: cacheBuster + 1 },
+              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+            }),
+            axios.get('/api/users', {
+              params: { role: 'staff', _t: cacheBuster + 2 },
+              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+            }),
+            axios.get('/api/users', {
+              params: { role: 'accounter', _t: cacheBuster + 3 },
+              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+            }),
           ]);
 
           const mgrList = (mgrRes.data.users || mgrRes.data || []).filter((u) => {
@@ -392,8 +418,12 @@ export default {
 
           this.users = [...mgrList, ...staffList, ...actList];
         } else {
-          // fallback: fetch all users (existing behavior)
-          const res = await axios.get('/user');
+          // fallback: fetch all users (existing behavior) with cache-busting
+          const cacheBuster = Date.now();
+          const res = await axios.get('/api/users', {
+            params: { _t: cacheBuster },
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          });
           this.users = res.data.users || res.data || [];
         }
 
