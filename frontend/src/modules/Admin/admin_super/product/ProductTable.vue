@@ -6,47 +6,7 @@
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
-      <header class="bg-white border-b border-gray-200 px-6 py-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-lg font-medium text-gray-900">Product Management</h1>
-          </div>
-
-          <div class="flex items-center gap-4">
-            <div class="relative" ref="userArea">
-              <button
-                @click.stop="toggleUserMenu"
-                class="inline-flex items-center space-x-2 px-3 py-1 rounded-md hover:bg-gray-100"
-                aria-haspopup="true"
-                :aria-expanded="showUserMenu"
-              >
-                <span class="text-sm font-medium text-gray-800">{{ userFullName }}</span>
-                <svg class="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                  <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-                </svg>
-              </button>
-
-              <!-- Dropdown -->
-              <transition name="fade">
-                <div
-                  v-if="showUserMenu"
-                  ref="userMenu"
-                  class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
-                >
-                  <div class="py-2">
-                    <button
-                      @click="handleLogout"
-                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                </div>
-              </transition>
-            </div>
-          </div>
-        </div>
-      </header>
+    <Headers />
 
       <!-- Page Content -->
       <main class="flex-1 overflow-auto bg-gray-50 p-8">
@@ -261,6 +221,7 @@
 <script>
 import axios from 'axios';
 import Sidebar from '../Sidebar.vue';
+import Headers from '../header.vue';
 import CreateProductModal from './CreateProductModal.vue';
 import EditProductModal from './EditProductModal.vue';
 
@@ -268,6 +229,7 @@ export default {
   name: 'ProductTable',
   components: {
     Sidebar,
+    Headers,
     CreateProductModal,
     EditProductModal
   },

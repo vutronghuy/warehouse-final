@@ -1,14 +1,16 @@
 const Product = require('../models/products/product');
+const User = require('../models/User');
 const mongoose = require('mongoose');
+const ProductImportController = require('./ProductImportController');
 
 // Get all products
 exports.getAllProducts = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search, status, categoryId } = req.query;
-    
+    const { page = 1, limit = 10, search, status, categoryId, warehouseId, all } = req.query;
+
     // Build filter object
     const filter = {};
-    
+
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -16,7 +18,7 @@ exports.getAllProducts = async (req, res, next) => {
         { description: { $regex: search, $options: 'i' } }
       ];
     }
-    
+
     if (status) {
       filter.status = status;
     }
@@ -25,32 +27,107 @@ exports.getAllProducts = async (req, res, next) => {
       filter.categoryId = categoryId;
     }
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    // Get products with pagination and populate references
-    const products = await Product.find(filter)
-      .populate('categoryId', 'name')
-      .populate('primarySupplierId', 'name')
-      .sort({ name: 1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
+    if (warehouseId) {
+      filter.warehouseId = warehouseId;
+    }
 
-    // Get total count for pagination
-    const total = await Product.countDocuments(filter);
-    
-    res.json({
-      success: true,
-      products,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
-        totalProducts: total,
-        hasNext: skip + products.length < total,
-        hasPrev: parseInt(page) > 1
+    // For non-super admin users, filter by their warehouse
+    if (req.user && !req.user.isSuperAdmin) {
+      try {
+        const user = await User.findById(req.user.sub).lean();
+        if (user) {
+          let userWarehouseIds = [];
+
+          // Get warehouse ID based on user role
+          if (req.user.role === 'staff' && user.staff?.warehouseId) {
+            userWarehouseIds = [user.staff.warehouseId];
+          } else if (req.user.role === 'manager' && user.manager?.warehouseId) {
+            userWarehouseIds = [user.manager.warehouseId];
+          } else if (req.user.role === 'accounter' && user.accounter?.warehouseId) {
+            userWarehouseIds = [user.accounter.warehouseId];
+          } else if (req.user.role === 'admin' && user.admin?.managedWarehouses && user.admin.managedWarehouses.length > 0) {
+            userWarehouseIds = user.admin.managedWarehouses;
+          }
+
+          if (userWarehouseIds.length > 0) {
+            if (userWarehouseIds.length === 1) {
+              filter.warehouseId = userWarehouseIds[0];
+            } else {
+              filter.warehouseId = { $in: userWarehouseIds };
+            }
+          }
+        }
+      } catch (userError) {
+        console.error('Error fetching user warehouse info:', userError);
       }
-    });
+    }
+
+    let products;
+    let total;
+
+    if (all === 'true') {
+      // Get all products without pagination
+      products = await Product.find(filter)
+        .populate('categoryId', 'name')
+        .populate('primarySupplierId', 'name')
+        .populate('warehouseId', 'name location')
+        .sort({ name: 1 })
+        .lean();
+
+      total = products.length;
+
+      // Set cache-busting headers to prevent 304 Not Modified
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'ETag': '',
+        'Last-Modified': new Date().toUTCString()
+      });
+
+      res.json({
+        success: true,
+        products,
+        total: total,
+        timestamp: Date.now() // Add timestamp for debugging
+      });
+    } else {
+      // Use pagination
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+
+      products = await Product.find(filter)
+        .populate('categoryId', 'name')
+        .populate('primarySupplierId', 'name')
+        .populate('warehouseId', 'name location')
+        .sort({ name: 1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean();
+
+      total = await Product.countDocuments(filter);
+
+      // Set cache-busting headers to prevent 304 Not Modified
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'ETag': '',
+        'Last-Modified': new Date().toUTCString()
+      });
+
+      res.json({
+        success: true,
+        products,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalProducts: total,
+          hasNext: skip + products.length < total,
+          hasPrev: parseInt(page) > 1
+        },
+        timestamp: Date.now() // Add timestamp for debugging
+      });
+    }
   } catch (error) {
     console.error('Error fetching products:', error);
     next(error);
@@ -482,3 +559,288 @@ exports.getProductStats = async (req, res, next) => {
     next(error);
   }
 };
+
+// Update min stock level
+exports.updateMinStock = async (req, res, next) => {
+  try {
+    console.log('🔄 UPDATE MIN STOCK CALLED!');
+    console.log('🔍 Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 User:', req.user);
+
+    const { productId, minStockLevel } = req.body;
+
+    console.log('🔍 Extracted values:', {
+      productId,
+      minStockLevel,
+      productIdType: typeof productId,
+      minStockLevelType: typeof minStockLevel,
+      isProductIdValid: mongoose.Types.ObjectId.isValid(productId),
+      isMinStockNumber: !isNaN(minStockLevel)
+    });
+
+    if (!productId || minStockLevel === undefined || minStockLevel === null) {
+      console.log('❌ Validation failed:', {
+        hasProductId: !!productId,
+        hasMinStockLevel: minStockLevel !== undefined && minStockLevel !== null,
+        minStockLevelValue: minStockLevel
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID and min stock level are required'
+      });
+    }
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      console.log('❌ Invalid ObjectId:', productId);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format'
+      });
+    }
+
+    // Validate min stock level is a number
+    const minStock = parseInt(minStockLevel);
+    if (isNaN(minStock) || minStock < 0) {
+      console.log('❌ Invalid min stock level:', minStockLevel);
+      return res.status(400).json({
+        success: false,
+        message: 'Min stock level must be a valid non-negative number'
+      });
+    }
+
+    console.log('🔍 Attempting to update product:', productId, 'with min stock:', minStock);
+
+    const product = await Product.findByIdAndUpdate(
+      productId,
+      {
+        minStockLevel: minStock,
+        updatedBy: req.user.sub,
+        updatedAt: new Date()
+      },
+      { new: true }
+    ).populate('categoryId', 'name')
+     .populate('primarySupplierId', 'name')
+     .populate('warehouseId', 'name location');
+
+    if (!product) {
+      console.log('❌ Product not found:', productId);
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    console.log('✅ Min stock updated successfully:', {
+      productId: product._id,
+      productName: product.name,
+      oldMinStock: 'unknown',
+      newMinStock: product.minStockLevel
+    });
+
+    res.json({
+      success: true,
+      message: 'Min stock level updated successfully',
+      product
+    });
+  } catch (error) {
+    console.error('❌ Error updating min stock level:', error);
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while updating min stock level'
+    });
+  }
+};
+
+// Bulk update product status
+exports.bulkUpdateStatus = async (req, res, next) => {
+  try {
+    console.log('🚀 BULK UPDATE STATUS CALLED!');
+    console.log('🔍 Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 Request headers:', req.headers);
+    console.log('🔍 User:', req.user);
+    console.log('🔍 Request method:', req.method);
+    console.log('🔍 Request URL:', req.url);
+
+    const { productIds, status } = req.body;
+
+    console.log('🔍 Bulk update request:', {
+      userId: req.user.sub,
+      role: req.user.role,
+      productIds: productIds,
+      productIdsType: typeof productIds,
+      productIdsIsArray: Array.isArray(productIds),
+      status: status,
+      isSuperAdmin: req.user.isSuperAdmin
+    });
+
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0 || !status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product IDs array and status are required'
+      });
+    }
+
+    // Validate all product IDs are valid ObjectIds
+    console.log('🔍 Validating product IDs:', {
+      productIds: productIds,
+      types: productIds.map(id => ({
+        id,
+        type: typeof id,
+        length: id?.length,
+        isString: typeof id === 'string',
+        isValidObjectId: mongoose.Types.ObjectId.isValid(id),
+        stringValue: String(id),
+        jsonStringify: JSON.stringify(id)
+      }))
+    });
+
+    const invalidIds = productIds.filter(id => {
+      const isValid = mongoose.Types.ObjectId.isValid(id);
+      if (!isValid) {
+        console.log('❌ Invalid ID found:', {
+          id,
+          type: typeof id,
+          length: id?.length,
+          isString: typeof id === 'string',
+          stringValue: String(id),
+          jsonStringify: JSON.stringify(id),
+          isValidObjectId: mongoose.Types.ObjectId.isValid(id)
+        });
+      }
+      return !isValid;
+    });
+
+    if (invalidIds.length > 0) {
+      console.log('❌ Invalid product IDs:', invalidIds);
+      return res.status(400).json({
+        success: false,
+        message: `Invalid product ID: ${invalidIds[0]}`,
+        invalidIds: invalidIds
+      });
+    }
+
+    const validStatuses = ['in stock', 'out of stock'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be "in stock" or "out of stock"'
+      });
+    }
+
+    // Build filter for products
+    const filter = { _id: { $in: productIds } };
+
+    // For non-super admin users, ensure they can only update products in their warehouse
+    if (!req.user.isSuperAdmin) {
+      try {
+        const user = await User.findById(req.user.sub).lean();
+        if (user) {
+          let userWarehouseIds = [];
+
+          // Get warehouse ID based on user role
+          if (req.user.role === 'staff' && user.staff?.warehouseId) {
+            userWarehouseIds = [user.staff.warehouseId];
+          } else if (req.user.role === 'manager' && user.manager?.warehouseId) {
+            userWarehouseIds = [user.manager.warehouseId];
+          } else if (req.user.role === 'accounter' && user.accounter?.warehouseId) {
+            userWarehouseIds = [user.accounter.warehouseId];
+          } else if (req.user.role === 'admin' && user.admin?.managedWarehouses && user.admin.managedWarehouses.length > 0) {
+            userWarehouseIds = user.admin.managedWarehouses;
+          }
+
+          if (userWarehouseIds.length > 0) {
+            if (userWarehouseIds.length === 1) {
+              filter.warehouseId = userWarehouseIds[0];
+            } else {
+              filter.warehouseId = { $in: userWarehouseIds };
+            }
+            console.log('🏢 Filtering by warehouses:', userWarehouseIds);
+          } else {
+            return res.status(403).json({
+              success: false,
+              message: 'User is not assigned to any warehouse'
+            });
+          }
+        } else {
+          return res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
+        }
+      } catch (userError) {
+        console.error('Error fetching user warehouse info:', userError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to verify user warehouse access'
+        });
+      }
+    }
+
+    console.log('📋 Final filter:', filter);
+
+    const result = await Product.updateMany(filter, {
+      status: status,
+      updatedBy: req.user.sub,
+      updatedAt: new Date()
+    });
+
+    console.log('✅ Update result:', {
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+
+    res.json({
+      success: true,
+      message: `Updated ${result.modifiedCount} products`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('❌ Error bulk updating product status:', error);
+    next(error);
+  }
+};
+
+// Test endpoint for debugging ObjectId validation
+exports.testObjectIdValidation = async (req, res) => {
+  try {
+    const { testIds } = req.body;
+
+    console.log('🧪 Testing ObjectId validation:', testIds);
+
+    const results = testIds.map(id => ({
+      id: id,
+      type: typeof id,
+      length: id?.length,
+      isString: typeof id === 'string',
+      mongooseValid: mongoose.Types.ObjectId.isValid(id),
+      regexValid: /^[0-9a-fA-F]{24}$/.test(id),
+      stringValue: String(id),
+      jsonStringify: JSON.stringify(id),
+      charCodes: typeof id === 'string' ? Array.from(id).map(char => char.charCodeAt(0)) : null
+    }));
+
+    res.json({
+      success: true,
+      results: results
+    });
+  } catch (error) {
+    console.error('❌ Error testing ObjectId validation:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Import functions
+exports.importProducts = ProductImportController.importProducts;
+exports.generateTemplate = ProductImportController.generateTemplate;

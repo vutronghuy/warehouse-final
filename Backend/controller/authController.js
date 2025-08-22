@@ -609,3 +609,53 @@ exports.logout = async (req, res) => {
     return res.status(500).json({ ok: false, message: 'Server error.' });
   }
 };
+
+// Get current user info
+exports.getCurrentUser = async (req, res) => {
+  try {
+    console.log('🔍 GET CURRENT USER CALLED!');
+    console.log('🔍 User from token:', req.user);
+
+    if (!req.user || !req.user.sub) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Find user by ID
+    const user = await User.findById(req.user.sub).lean();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Remove sensitive information
+    const safeUser = { ...user };
+    if (safeUser[user.role] && safeUser[user.role].password) {
+      delete safeUser[user.role].password;
+    }
+    if (safeUser[user.role] && safeUser[user.role].resetToken) {
+      delete safeUser[user.role].resetToken;
+    }
+
+    console.log('✅ User found:', {
+      id: user._id,
+      role: user.role,
+      fullName: user[user.role]?.fullName
+    });
+
+    res.json({
+      success: true,
+      user: safeUser
+    });
+  } catch (error) {
+    console.error('❌ Error getting current user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};

@@ -1,83 +1,11 @@
 <template>
-  <div class="flex h-screen bg-gray-50">
+  <div class="min-h-screen bg-gray-50">
     <!-- Sidebar -->
-    <aside class="w-80 bg-white shadow-sm border-r border-gray-200">
-      <div class="p-6 border-b border-gray-100">
-        <h1 class="text-xl font-bold text-gray-800">Admin Panel</h1>
-      </div>
+    <AdminSidebar />
 
-      <!-- Navigation Section -->
-      <div class="p-4">
-        <div class="mb-3">
-          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2">Navigation</p>
-        </div>
-
-        <nav class="space-y-1">
-          <!-- ... keep your router-links ... -->
-          <router-link
-            to="/admin/dashboard"
-            class="flex items-center px-3 py-2.5 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150"
-          >
-            <!-- icon omitted for brevity -->
-            Dashboard
-          </router-link>
-
-          <router-link
-            to="/admin/users"
-            class="flex items-center px-3 py-2.5 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg"
-          >
-            Users
-          </router-link>
-
-          <!-- other links omitted for brevity -->
-        </nav>
-      </div>
-    </aside>
-
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col overflow-hidden">
-      <!-- Header -->
-      <header class="bg-white border-b border-gray-200 px-6 py-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-lg font-medium text-gray-900">Admin Dashboard</h1>
-          </div>
-
-          <!-- User area -->
-          <div class="relative" ref="userArea">
-            <button
-              @click.stop="toggleUserMenu"
-              class="inline-flex items-center space-x-2 px-3 py-1 rounded-md hover:bg-gray-100"
-              aria-haspopup="true"
-              :aria-expanded="showUserMenu"
-            >
-              <span class="text-sm font-medium text-gray-800">{{ userFullName }}</span>
-              <svg class="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-              </svg>
-            </button>
-
-            <transition name="fade">
-              <div
-                v-if="showUserMenu"
-                ref="userMenu"
-                class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
-              >
-                <div class="py-2">
-                  <button
-                    @click="handleLogout"
-                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Logout
-                  </button>
-                </div>
-              </div>
-            </transition>
-          </div>
-        </div>
-      </header>
-
-      <!-- Page Content -->
+    <!-- Main Content with left margin to avoid sidebar overlap -->
+    <HeadBar />
+    <div class="ml-64 py-8">
       <main class="flex-1 overflow-auto bg-gray-50 p-8">
         <!-- Page Header -->
         <div class="flex items-center justify-between mb-8">
@@ -212,13 +140,16 @@
       </main>
     </div>
   </div>
+  <div v-if="isDropdownOpen" @click="closeDropdown" class="fixed inset-0 z-40"></div>
 </template>
 
 <script>
 import axios from 'axios';
+import AdminSidebar from './sidebar.vue';
+import HeadBar from './headbar.vue';
 
 // Add axios interceptor to prevent caching for user endpoints
-axios.interceptors.request.use(config => {
+axios.interceptors.request.use((config) => {
   // Add cache-busting headers for user-related requests
   if (config.url && config.url.includes('/users')) {
     config.headers['Cache-Control'] = 'no-cache';
@@ -235,15 +166,18 @@ axios.interceptors.request.use(config => {
 
 export default {
   name: 'AdminDashboard',
+  components: {
+    AdminSidebar,
+    HeadBar,
+  },
   data() {
     return {
       search: '',
       users: [],
       showModal: false,
-      // pagination
+      isDropdownOpen: false,
       pageSize: 6,
       currentPage: 1,
-      // user menu
       showUserMenu: false,
       currentUserObj: null,
     };
@@ -276,6 +210,15 @@ export default {
       if (u.fullName) return u.fullName;
       if (u.name) return u.name;
       return 'User';
+    },
+    userInitials() {
+      const name = this.userFullName;
+      return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
     },
   },
   watch: {
@@ -315,6 +258,12 @@ export default {
   },
 
   methods: {
+    toggleDropdown() {
+      this.isDropdownOpen = !this.isDropdownOpen;
+    },
+    closeDropdown() {
+      this.isDropdownOpen = false;
+    },
     _loadUserFromStorage() {
       try {
         const raw = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -364,7 +313,7 @@ export default {
             ? u.staff.warehouseId
             : u.accounter && u.accounter.warehouseId
               ? u.accounter.warehouseId
-            : null;
+              : null;
       return wid ? String(wid) : '—';
     },
 
@@ -390,15 +339,15 @@ export default {
           const [mgrRes, staffRes, actRes] = await Promise.all([
             axios.get('/api/users', {
               params: { role: 'manager', _t: cacheBuster + 1 },
-              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+              headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
             }),
             axios.get('/api/users', {
               params: { role: 'staff', _t: cacheBuster + 2 },
-              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+              headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
             }),
             axios.get('/api/users', {
               params: { role: 'accounter', _t: cacheBuster + 3 },
-              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+              headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
             }),
           ]);
 
@@ -422,7 +371,7 @@ export default {
           const cacheBuster = Date.now();
           const res = await axios.get('/api/users', {
             params: { _t: cacheBuster },
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+            headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
           });
           this.users = res.data.users || res.data || [];
         }
@@ -459,25 +408,6 @@ export default {
       if (this.currentPage < this.totalPages) this.currentPage++;
     },
 
-    async handleLogout() {
-      try {
-        await axios.post('/api/auth/logout');
-      } catch (err) {
-        console.warn('Logout request failed (ignored):', err);
-      } finally {
-        try {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          sessionStorage.removeItem('token');
-          sessionStorage.removeItem('user');
-        } catch (e) {
-          // ensure we don't leave an empty catch - log if something goes wrong
-          console.warn('Failed to clear storage during logout:', e);
-        }
-        delete axios.defaults.headers.common['Authorization'];
-        this.$router.push('/login');
-      }
-    },
   },
 };
 </script>

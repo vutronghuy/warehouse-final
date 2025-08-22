@@ -1,261 +1,235 @@
 <template>
   <div class="flex h-screen bg-gray-50">
-    <!-- Sidebar -->
     <Sidebar />
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden">
-      <!-- Header -->
-      <header class="bg-white border-b border-gray-200 px-6 py-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-lg font-medium text-gray-900">User Management</h1>
-          </div>
-
-          <div class="flex items-center gap-4">
-            <div class="relative" ref="userArea">
-              <button
-                @click.stop="toggleUserMenu"
-                class="inline-flex items-center space-x-2 px-3 py-1 rounded-md hover:bg-gray-100"
-                aria-haspopup="true"
-                :aria-expanded="showUserMenu"
-              >
-                <span class="text-sm font-medium text-gray-800">{{ userFullName }}</span>
-                <svg class="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                  <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-                </svg>
-              </button>
-
-              <!-- Dropdown -->
-              <transition name="fade">
-                <div
-                  v-if="showUserMenu"
-                  ref="userMenu"
-                  class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
-                >
-                  <div class="py-2">
-                    <button
-                      @click="handleLogout"
-                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                </div>
-              </transition>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <!-- Page Content -->
-      <main class="flex-1 overflow-auto bg-gray-50 p-8">
-        <!-- Page Header -->
-        <div class="flex items-center justify-between mb-8">
-          <h2 class="text-3xl font-bold text-gray-900">User Management</h2>
-          <button
-            @click="showModal = true"
-            class="inline-flex items-center px-4 py-2.5 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-150"
-          >
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add User
-          </button>
-        </div>
-
-        <!-- Search Bar and Filters -->
-        <div class="mb-6 flex flex-col sm:flex-row gap-4">
-          <!-- Search Input -->
-          <div class="relative max-w-md">
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
+      <Headers />
+      <div>
+        <!-- Page Content -->
+        <main class="flex-1 overflow-auto bg-gray-50 p-8">
+          <!-- Page Header -->
+          <div class="flex items-center justify-between mb-8">
+            <h2 class="text-3xl font-bold text-gray-900">User Management</h2>
+            <button
+              @click="showModal = true"
+              class="inline-flex items-center px-4 py-2.5 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-150"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
+              Add User
+            </button>
+          </div>
+
+          <!-- Search Bar and Filters -->
+          <div class="mb-6 flex flex-col sm:flex-row gap-4">
+            <!-- Search Input -->
+            <div class="relative max-w-md">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+              <input
+                v-model="search"
+                type="text"
+                placeholder="Search users..."
+                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-colors duration-150"
+              />
             </div>
-            <input
-              v-model="search"
-              type="text"
-              placeholder="Search users..."
-              class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-colors duration-150"
-            />
-          </div>
 
-          <!-- Role Filter -->
-          <div class="relative">
-            <select
-              v-model="selectedRole"
-              class="block w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-150"
-            >
-              <option value="">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="staff">Staff</option>
-              <option value="accounter">Accounter</option>
-            </select>
-          </div>
-
-          <!-- Status Filter -->
-          <div class="relative">
-            <select
-              v-model="selectedStatus"
-              class="block w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-150"
-            >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Users Table -->
-        <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  #
-                </th>
-                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Name
-                </th>
-                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Email
-                </th>
-                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Role
-                </th>
-                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Status
-                </th>
-                <th
-                  class="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider"
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-100">
-              <tr
-                v-for="(user, idx) in paginatedUsers"
-                :key="user._id"
-                class="hover:bg-gray-50 transition-colors duration-150"
+            <!-- Role Filter -->
+            <div class="relative">
+              <select
+                v-model="selectedRole"
+                class="block w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-150"
               >
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {{ (currentPage - 1) * pageSize + idx + 1 }}
-                </td>
+                <option value="">All Roles</option>
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
+                <option value="staff">Staff</option>
+                <option value="accounter">Accounter</option>
+              </select>
+            </div>
 
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                  {{
-                    user.admin?.username ||
-                    user.manager?.username ||
-                    user.staff?.username ||
-                    user.accounter?.username ||
-                    '—'
-                  }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  {{
-                    user.admin?.email ||
-                    user.manager?.email ||
-                    user.staff?.email ||
-                    user.accounter?.email ||
-                    '—'
-                  }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ user.role }}</td>
+            <!-- Status Filter -->
+            <div class="relative">
+              <select
+                v-model="selectedStatus"
+                class="block w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-150"
+              >
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
 
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span
-                    :class="{
-                      'inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full': true,
-                      'bg-green-100 text-green-700': user.userStatus?.status === 'active',
-                      'bg-red-100 text-red-700': user.userStatus?.status === 'inactive',
-                    }"
+          <!-- Users Table -->
+          <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th
+                    class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
                   >
-                    {{ user.userStatus?.status === 'active' ? 'Active' : 'Inactive' }}
-                  </span>
-                </td>
-
-                <td class="px-6 py-4 whitespace-nowrap text-center">
-                  <div class="flex items-center justify-center space-x-3">
-                    <!-- Open Edit Modal -->
-                    <button
-                      @click="openEditModal(user)"
-                      class="inline-flex items-center p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-150"
-                      title="Edit user"
-                    >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                    </button>
-
-                    <!-- Delete -->
-                    <button
-                      @click="deleteUser(user._id)"
-                      class="inline-flex items-center p-2 text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors duration-150"
-                      title="Delete user"
-                    >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <!-- Pagination controls -->
-          <div class="px-6 py-4 bg-white border-t flex items-center justify-between">
-            <div class="text-sm text-gray-600">
-              Hiển thị <span class="font-medium">{{ paginatedUsers.length }}</span> trên tổng
-              <span class="font-medium">{{ filteredUsers.length }}</span> người dùng
-            </div>
-
-            <div class="flex items-center space-x-2">
-              <button
-                @click="prevPage"
-                :disabled="currentPage === 1"
-                class="px-3 py-1 rounded-md border disabled:opacity-50"
-              >
-                Prev
-              </button>
-
-              <template v-for="p in totalPages" :key="p">
-                <button
-                  @click="goToPage(p)"
-                  :class="['px-3 py-1 rounded-md border', currentPage === p ? 'bg-slate-800 text-white' : '']"
+                    #
+                  </th>
+                  <th
+                    class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                  >
+                    Name
+                  </th>
+                  <th
+                    class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                  >
+                    Email
+                  </th>
+                  <th
+                    class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                  >
+                    Role
+                  </th>
+                  <th
+                    class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                  >
+                    Status
+                  </th>
+                  <th
+                    class="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                  >
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-100">
+                <tr
+                  v-for="(user, idx) in paginatedUsers"
+                  :key="user._id"
+                  class="hover:bg-gray-50 transition-colors duration-150"
                 >
-                  {{ p }}
-                </button>
-              </template>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {{ (currentPage - 1) * pageSize + idx + 1 }}
+                  </td>
 
-              <button
-                @click="nextPage"
-                :disabled="currentPage === totalPages || totalPages === 0"
-                class="px-3 py-1 rounded-md border disabled:opacity-50"
-              >
-                Next
-              </button>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                    {{
+                      user.admin?.username ||
+                      user.manager?.username ||
+                      user.staff?.username ||
+                      user.accounter?.username ||
+                      '—'
+                    }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {{
+                      user.admin?.email ||
+                      user.manager?.email ||
+                      user.staff?.email ||
+                      user.accounter?.email ||
+                      '—'
+                    }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {{ user.role }}
+                  </td>
+
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span
+                      :class="{
+                        'inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full': true,
+                        'bg-green-100 text-green-700': user.userStatus?.status === 'active',
+                        'bg-red-100 text-red-700': user.userStatus?.status === 'inactive',
+                      }"
+                    >
+                      {{ user.userStatus?.status === 'active' ? 'Active' : 'Inactive' }}
+                    </span>
+                  </td>
+
+                  <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <div class="flex items-center justify-center space-x-3">
+                      <!-- Open Edit Modal -->
+                      <button
+                        @click="openEditModal(user)"
+                        class="inline-flex items-center p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-150"
+                        title="Edit user"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
+                      </button>
+
+                      <!-- Delete -->
+                      <button
+                        @click="deleteUser(user._id)"
+                        class="inline-flex items-center p-2 text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors duration-150"
+                        title="Delete user"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Pagination controls -->
+            <div class="px-6 py-4 bg-white border-t flex items-center justify-between">
+              <div class="text-sm text-gray-600">
+                Hiển thị <span class="font-medium">{{ paginatedUsers.length }}</span> trên tổng
+                <span class="font-medium">{{ filteredUsers.length }}</span> người dùng
+              </div>
+
+              <div class="flex items-center space-x-2">
+                <button
+                  @click="prevPage"
+                  :disabled="currentPage === 1"
+                  class="px-3 py-1 rounded-md border disabled:opacity-50"
+                >
+                  Prev
+                </button>
+
+                <template v-for="p in totalPages" :key="p">
+                  <button
+                    @click="goToPage(p)"
+                    :class="[
+                      'px-3 py-1 rounded-md border',
+                      currentPage === p ? 'bg-slate-800 text-white' : '',
+                    ]"
+                  >
+                    {{ p }}
+                  </button>
+                </template>
+
+                <button
+                  @click="nextPage"
+                  :disabled="currentPage === totalPages || totalPages === 0"
+                  class="px-3 py-1 rounded-md border disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
 
     <!-- Modals -->
@@ -274,11 +248,12 @@ import axios from 'axios';
 import CreateUserModal from './modal.vue';
 import EditUserModal from './EditModal.vue';
 import Sidebar from './Sidebar.vue';
+import Headers from './header.vue';
 axios.defaults.baseURL = 'http://localhost:3003'; // adjust if needed
 
 export default {
   name: 'AdminDashboard',
-  components: { CreateUserModal, EditUserModal, Sidebar },
+  components: { CreateUserModal, EditUserModal, Sidebar, Headers },
   data() {
     return {
       search: '',
@@ -484,27 +459,6 @@ export default {
           sessionStorage.removeItem('token');
           if (this.$router) this.$router.push('/login');
         }
-      }
-    },
-
-    async handleLogout() {
-      try {
-        await axios.post('/api/auth/logout');
-      } catch (err) {
-        console.warn('Logout request failed (ignored):', err);
-      } finally {
-        try {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          sessionStorage.removeItem('token');
-          sessionStorage.removeItem('user');
-        } catch (e) {
-          /* ignore */
-        }
-
-        delete axios.defaults.headers.common['Authorization'];
-
-        if (this.$router) this.$router.push('/login');
       }
     },
   },

@@ -18,6 +18,8 @@ const userRoute = require('./router/UserRoute');
 const authRoute = require('./router/authRoute');
 const exportRoute = require('./router/ExportRoute');
 const importRoute = require('./router/ImportRoute');
+const exportReceiptRoute = require('./router/ExportReceiptRoute');
+const invoiceRoute = require('./router/InvoiceRoute');
 //connect to mongodb
 const dbURI = process.env.DB_URI;
 mongoose.connect(dbURI, {
@@ -33,10 +35,20 @@ app.use(express.text()); // Thêm dòng này để parse text/plain
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:4173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
 }));
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`📥 ${req.method} ${req.originalUrl}`, {
+    body: req.body,
+    headers: req.headers.authorization ? 'Bearer ***' : 'No auth',
+    timestamp: new Date().toISOString()
+  });
+  next();
+});
 
 //router
 app.use('/api/suppliers', supplierRoute)
@@ -53,6 +65,8 @@ app.use('/api/users', (req, res, next) => {
 
 app.use('/api/users', userRoute)
 app.use('/api/auth', authRoute)
+app.use('/api/export-receipts', exportReceiptRoute)
+app.use('/api/invoices', invoiceRoute)
 app.use('/export', exportRoute)
 app.use('/import', importRoute)
 app.get('/', (req, res) => {
@@ -60,7 +74,8 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`📍 API Base URL: http://localhost:${PORT}`);
 });
 
 

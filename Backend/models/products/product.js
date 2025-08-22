@@ -35,12 +35,17 @@ const productSchema = new Schema(
 
 
     minStockLevel: { type: Number, default: 0, min: 0 },
+    quantity: { type: Number, default: 0, min: 0 }, // Current stock quantity
+    warehouseId: {
+      type: Schema.Types.ObjectId,
+      ref: "Warehouse",
+      required: true
+    }, // Product belongs to specific warehouse
     status: {
       type: String,
       default: "in stock",
       enum: [ "in stock", "out of stock"]
     },
-    expiryDate: { type: Date },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     deletedAt: { type: Date, default: null },

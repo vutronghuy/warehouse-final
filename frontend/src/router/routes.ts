@@ -11,9 +11,9 @@ import ProductTable from '@/modules/Admin/admin_super/Product/ProductTable.vue';
 import WarehouseTable from '@/modules/Admin/admin_super/Warehouse/WarehouseTable.vue';
 import Login from '@/modules/Auth/Login.vue';
 import Admin from '@/modules/Admin/Admin/Admin.vue';
-import Manager from '@/modules/User/manager.vue';
-import Accounter from '@/modules/User/accounter.vue';
-import Staff from '@/modules/User/staff.vue';
+import Manager from '@/modules/User/managers/manager.vue';
+import Accounter from '@/modules/User/accounters/accounter.vue';
+import Staff from '@/modules/User/staffs/staff.vue';
 import EnterEmail from '@/modules/Forgot/EnterEmail.vue';
 import EnterOTP from '@/modules/Forgot/EnterOTP.vue';
 import EnterNewPassword from '@/modules/Forgot/EnterNewPassword.vue';
@@ -75,7 +75,14 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/Superadmin/products',
     name: 'SuperAdminProducts',
-    component: ProductTable, // Trang CRUD products
+    component: () => import('../modules/Admin/admin_super/product/MinStockManager.vue'), // Min Stock Management
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireSuperAdmin,
+  },
+  {
+    path: '/Superadmin/products/table',
+    name: 'SuperAdminProductTable',
+    component: ProductTable, // Product Table
     meta: { layout: 'defaultNoHeader' },
     beforeEnter: requireSuperAdmin,
   },
@@ -94,11 +101,39 @@ const routes: RouteRecordRaw[] = [
     beforeEnter: requireAdmin, // Admin và super admin vào được
   },
   {
+    path: '/admin/products',
+    name: 'AdminProducts',
+    component: () => import('../modules/Admin/Admin/ProductManagement.vue'), // Admin Product Management
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireAdmin,
+  },
+  {
+    path: '/admin/export-approval',
+    name: 'AdminExportApproval',
+    component: () => import('../modules/Admin/Admin/ExportApproval.vue'),
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireAdmin,
+  },
+  {
     path: '/manager',
     name: RouteName.MANAGER,
     component: Manager,
     meta: { layout: 'defaultNoHeader' },
     beforeEnter: requireRole(['manager']), // Chỉ manager vào được
+  },
+  {
+    path: '/manager/export-review',
+    name: 'ManagerExportReview',
+    component: () => import('../modules/User/managers/ExportReview.vue'),
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireRole(['manager']),
+  },
+  {
+    path: '/manager/users',
+    name: 'ManagerUsers',
+    component: () => import('../modules/User/managers/ManagerUsers.vue'),
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireRole(['manager']),
   },
   {
     path: '/staff',

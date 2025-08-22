@@ -447,6 +447,13 @@ exports.getAllUsers = async (req, res, next) => {
         { role: "staff", "staff.warehouseId": { $in: managed } },
         { role: "accounter", "accounter.warehouseId": { $in: managed } },
       ]);
+    } else if (requester.role === "manager" && requester.manager?.warehouseId) {
+      // Manager can only see users in their warehouse
+      const warehouseId = requester.manager.warehouseId;
+      query = query.or([
+        { role: "staff", "staff.warehouseId": warehouseId },
+        { role: "accounter", "accounter.warehouseId": warehouseId },
+      ]);
     } else {
       return res.status(403).json({ message: "Forbidden: insufficient permissions." });
     }
@@ -460,6 +467,13 @@ exports.getAllUsers = async (req, res, next) => {
         query = query.where("role").equals(role);
       } else if ((requester.role === "admin" || requester.roleKey === "admin") && (requester.admin || requester.roleKey === "admin")) {
         if (role === "manager" || role === "staff" || role === "accounter") {
+          query = query.where("role").equals(role);
+        } else {
+          return res.status(403).json({ message: "Forbidden: insufficient permissions to list this role." });
+        }
+      } else if (requester.role === "manager" && requester.manager?.warehouseId) {
+        // Manager can only filter staff and accounter roles
+        if (role === "staff" || role === "accounter") {
           query = query.where("role").equals(role);
         } else {
           return res.status(403).json({ message: "Forbidden: insufficient permissions to list this role." });
