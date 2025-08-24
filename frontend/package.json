@@ -1,0 +1,72 @@
+{
+  "name": "vite-ts-boilerplate",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:testing": "vue-tsc --noEmit && vite build --mode testing",
+    "preview": "vite preview",
+    "types-check": "vue-tsc --noEmit",
+    "lint:partOfScript": "eslint -c .eslintrc.cjs --ignore-path .gitignore --ignore-path .eslintignore --quiet",
+    "lint:script": "npm run lint:partOfScript -- \"./src/**/*.{js,cjs,ts,vue}\"",
+    "lint:partOfPrettier": "prettier --ignore-path .gitignore",
+    "lint:prettier": "npm run lint:partOfPrettier -- \"src/**/*+(js|cjs|ts|vue|scss)\"",
+    "lint:partOfStyle": "stylelint --allow-empty-input -i .gitignore -i .stylelintignore",
+    "lint:style": "npm run lint:partOfStyle -- src/**/*.{css,scss}",
+    "lint": "npm run lint:style && npm run lint:prettier -- --check && npm run lint:script",
+    "lintfix": "npm run lint:style -- --fix && npm run lint:prettier -- --write && npm run lint:script -- --fix",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
+    "ant-design-vue": "^4.2.6",
+    "axios": "^1.9.0",
+    "date-fns": "^4.1.0",
+    "json-bigint": "^1.0.0",
+    "lodash-es": "^4.17.21",
+    "pinia": "^3.0.2",
+    "tailwindcss": "^3.4.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.11",
+    "@types/lodash-es": "^4.17.12",
+    "@types/node": "^20.14.12",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitejs/plugin-vue": "^5.2.3",
+    "@vue/eslint-config-prettier": "^9.0.0",
+    "@vue/eslint-config-typescript": "^13.0.0",
+    "eslint": "^8.57.1",
+    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-vue": "^9.27.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
+    "postcss": "^8.4.49",
+    "postcss-html": "^1.7.0",
+    "prettier": "^3.4.2",
+    "sass": "^1.87.0",
+    "stylelint": "^16.19.1",
+    "stylelint-config-prettier-scss": "^1.0.0",
+    "stylelint-config-recommended-vue": "^1.6.0",
+    "stylelint-config-standard-scss": "^14.0.0",
+    "typescript": "~5.5.4",
+    "vite": "^6.3.5",
+    "vite-svg-loader": "^5.1.0",
+    "vue-tsc": "^2.2.10"
+  },
+  "lint-staged": {
+    "*.{js,cjs,ts,vue}": [
+      "npm run lint:partOfScript"
+    ],
+    "*.{js,cjs,ts,vue,css,scss}": [
+      "npm run lint:partOfPrettier -- --check"
+    ],
+    "*.{css,scss}": [
+      "npm run lint:partOfStyle"
+    ]
+  }
+}
