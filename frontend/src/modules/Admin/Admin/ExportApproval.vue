@@ -4,7 +4,7 @@
     <AdminSidebar />
 
     <!-- Main Content with left margin to avoid sidebar overlap -->
-      <HeadBar />
+    <HeadBar />
 
     <div class="ml-64 py-8">
       <main class="flex-1 overflow-auto bg-gray-50 p-8">
@@ -71,34 +71,114 @@
               <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt #</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reviewed</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Receipt #
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Customer
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Phone
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Staff
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Manager
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Total
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Status
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Reviewed
+                    </th>
+                    <th
+                      class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                   <tr v-for="receipt in exportReceipts" :key="receipt._id" class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ receipt.receiptNumber }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {{ receipt.receiptNumber }}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="text-sm font-medium text-gray-900">{{ receipt.customerName }}</div>
+                      <div class="flex items-center gap-3">
+                        <div
+                          class="w-10 h-10 bg-gradient-to-br from-[#6A4C93] to-[#8E63B9] rounded-full flex items-center justify-center text-white font-semibold"
+                        >
+                          {{ getUserInitials(receipt.customerName) }}
+                        </div>
+                        <div class="text-sm font-medium text-gray-900">{{ receipt.customerName }}</div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div class="text-sm text-gray-500">{{ receipt.customerPhone }}</div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ getStaffName(receipt.createdByStaff) }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ getManagerName(receipt.managerReview?.reviewedBy) }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${{ (receipt.totalAmount && typeof receipt.totalAmount === 'number') ? receipt.totalAmount.toFixed(2) : (receipt.totalAmount ? parseFloat(receipt.totalAmount).toFixed(2) : '0.00') }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span :class="getStatusClass(receipt.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">{{ getStatusText(receipt.status) }}</span>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {{ getStaffName(receipt.createdByStaff) }}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(receipt.managerReview?.reviewedAt) }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {{ getManagerName(receipt.managerReview?.reviewedBy) }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      ${{
+                        receipt.totalAmount && typeof receipt.totalAmount === 'number'
+                          ? receipt.totalAmount.toFixed(2)
+                          : receipt.totalAmount
+                            ? parseFloat(receipt.totalAmount).toFixed(2)
+                            : '0.00'
+                      }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        :class="getStatusClass(receipt.status)"
+                        class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                        >{{ getStatusText(receipt.status) }}</span
+                      >
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {{ formatDate(receipt.managerReview?.reviewedAt) }}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <button @click="viewReceipt(receipt)" class="text-blue-600 hover:text-blue-900">View</button>
-                      <button v-if="receipt.status === 'reviewed'" @click="approveReceipt(receipt, 'approve')" class="text-green-600 hover:text-green-900">Approve</button>
-                      <button v-if="receipt.status === 'reviewed'" @click="approveReceipt(receipt, 'reject')" class="text-red-600 hover:text-red-900">Reject</button>
+                      <button @click="viewReceipt(receipt)" class="text-blue-600 hover:text-blue-900">
+                        View
+                      </button>
+                      <button
+                        v-if="receipt.status === 'reviewed'"
+                        @click="approveReceipt(receipt, 'approve')"
+                        class="text-green-600 hover:text-green-900"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        v-if="receipt.status === 'reviewed'"
+                        @click="approveReceipt(receipt, 'reject')"
+                        class="text-red-600 hover:text-red-900"
+                      >
+                        Reject
+                      </button>
                     </td>
                   </tr>
                 </tbody>
@@ -108,10 +188,26 @@
             <!-- Pagination -->
             <div v-if="pagination && pagination.totalPages > 1" class="px-6 py-4 border-t border-gray-200">
               <div class="flex items-center justify-between">
-                <div class="text-sm text-gray-700">Showing {{ (pagination.currentPage - 1) * 10 + 1 }} to {{ Math.min(pagination.currentPage * 10, pagination.totalReceipts) }} of {{ pagination.totalReceipts }} results</div>
+                <div class="text-sm text-gray-700">
+                  Showing {{ (pagination.currentPage - 1) * 10 + 1 }} to
+                  {{ Math.min(pagination.currentPage * 10, pagination.totalReceipts) }} of
+                  {{ pagination.totalReceipts }} results
+                </div>
                 <div class="flex space-x-2">
-                  <button @click="changePage(pagination.currentPage - 1)" :disabled="!pagination.hasPrev" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                  <button @click="changePage(pagination.currentPage + 1)" :disabled="!pagination.hasNext" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                  <button
+                    @click="changePage(pagination.currentPage - 1)"
+                    :disabled="!pagination.hasPrev"
+                    class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    @click="changePage(pagination.currentPage + 1)"
+                    :disabled="!pagination.hasNext"
+                    class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
             </div>
@@ -149,7 +245,9 @@
           />
 
           <!-- Success/Error Messages -->
-          <div v-if="message" :class="messageClass" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50">{{ message }}</div>
+          <div v-if="message" :class="messageClass" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50">
+            {{ message }}
+          </div>
         </div>
       </main>
     </div>
@@ -214,7 +312,7 @@ export default {
       if (u.name) return u.name;
       return 'User';
     },
-       userInitials() {
+    userInitials() {
       const name = this.userFullName;
       return name
         .split(' ')
@@ -412,6 +510,15 @@ export default {
       return texts[status] || status;
     },
 
+    getUserInitials(name) {
+      if (!name) return 'NA';
+      return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    },
     getStaffName(staff) {
       if (!staff) return 'Unknown Staff';
       if (typeof staff === 'string') return staff;
@@ -466,7 +573,14 @@ export default {
 
     getProductPrice(product) {
       if (!product) return '0.00';
-      if (typeof product === 'object' && product?.basePrice !== undefined) return product.basePrice.toFixed ? product.basePrice.toFixed(2) : (parseFloat(product.basePrice) || 0).toFixed(2);
+      if (typeof product === 'object') {
+        const price = product.finalPrice ?? product.basePrice;
+        if (price !== undefined) {
+          return price.toFixed
+            ? price.toFixed(2)
+            : (parseFloat(price) || 0).toFixed(2);
+        }
+      }
       if (typeof product === 'number') return product.toFixed(2);
       if (typeof product === 'string' && !isNaN(parseFloat(product))) return parseFloat(product).toFixed(2);
       return '0.00';

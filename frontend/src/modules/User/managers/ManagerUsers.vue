@@ -75,6 +75,9 @@
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
+                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  #
+                </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   User
                 </th>
@@ -82,7 +85,7 @@
                   Role
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Contact
+                  Email
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -96,17 +99,19 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="user in users" :key="user._id" class="hover:bg-gray-50">
+              <tr v-for="(user, idx) in users" :key="user._id" class="hover:bg-gray-50">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  {{ idx + 1 }}
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center">
                     <div
-                      class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold"
+                      class="w-10 h-10 bg-gradient-to-br from-[#6A4C93] to-[#8E63B9] rounded-full flex items-center justify-center text-white font-semibold"
                     >
                       {{ getUserInitials(user) }}
                     </div>
                     <div class="ml-4">
                       <div class="text-sm font-medium text-gray-900">{{ getUserFullName(user) }}</div>
-                      <div class="text-sm text-gray-500">{{ getUserEmail(user) }}</div>
                     </div>
                   </div>
                 </td>
@@ -118,8 +123,7 @@
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <div>{{ getUserPhone(user) || 'N/A' }}</div>
-                  <div class="text-gray-500">{{ getUserAddress(user) || 'N/A' }}</div>
+                  <div class="text-gray-500">{{ getUserEmail(user) }}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span
@@ -544,7 +548,6 @@ export default {
         this.message = '';
       }, 5000);
     },
-
   },
 };
 </script>

@@ -186,10 +186,10 @@
                   <!-- Status -->
                   <td class="px-6 py-4 whitespace-nowrap">
                     <span
-                      :class="getStatusClass(product.status)"
+                      :class="getStockStatusClass(product)"
                       class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                     >
-                      {{ product.status === 'in stock' ? 'In Stock' : 'Out of Stock' }}
+                      {{ getStockStatusText(product) }}
                     </span>
                   </td>
 
@@ -382,6 +382,16 @@ export default {
     categoryFilter() {
       this.currentPage = 1;
     },
+    statusChangeProducts: {
+      handler(newVal, oldVal) {
+        console.log('🔄 statusChangeProducts changed:', {
+          old: oldVal,
+          new: newVal,
+          length: newVal.length,
+        });
+      },
+      deep: true,
+    },
   },
   mounted() {
     // Set axios baseURL
@@ -411,6 +421,26 @@ export default {
     },
     async fetchData() {
       await Promise.all([this.fetchProducts(), this.fetchCategories()]);
+      // Debug: Check all product IDs after fetching
+      this.debugProductIds();
+    },
+
+    debugProductIds() {
+      console.log('🔍 Debugging all product IDs:');
+      this.products.forEach((product, index) => {
+        const isValid = this.validateProductId(product._id);
+        console.log(`Product ${index + 1}:`, {
+          name: product.name,
+          id: product._id,
+          type: typeof product._id,
+          length: product._id?.length,
+          isValid: isValid,
+        });
+        if (!isValid) {
+          console.error('❌ Invalid product found:', product);
+        }
+      });
+      console.log('✅ Product ID debug complete');
     },
 
     async fetchProducts() {
@@ -534,7 +564,14 @@ export default {
     },
 
     async markSelectedOutOfStock() {
+      console.log('🚀 markSelectedOutOfStock method called!');
+      console.log('📊 statusChangeProducts:', this.statusChangeProducts);
+      console.log('📊 statusChangeProducts length:', this.statusChangeProducts.length);
+      console.log('📊 statusChangeProducts type:', typeof this.statusChangeProducts);
+      console.log('📊 statusChangeProducts constructor:', this.statusChangeProducts.constructor.name);
+
       if (this.statusChangeProducts.length === 0) {
+        console.log('❌ No products selected - showing error message');
         this.showMessage('No products selected for status change', 'error');
         return;
       }
@@ -664,18 +701,52 @@ export default {
       }
     },
 
-    getStatusClass(status) {
-      switch (status) {
-        case 'in stock':
-          return 'bg-green-100 text-green-800';
-        case 'out of stock':
-          return 'bg-red-100 text-red-800';
-        default:
-          return 'bg-gray-100 text-gray-800';
+    getStockStatusClass(product) {
+      // Ưu tiên kiểm tra trường status trước
+      if (product.status === 'out of stock') {
+        return 'bg-red-100 text-red-800';
       }
+      if (product.status === 'in stock') {
+        return 'bg-green-100 text-green-800';
+      }
+
+      // Nếu không có status hoặc status không rõ ràng, kiểm tra quantity
+      const quantity = product.quantity || 0;
+      const minStock = product.minStockLevel || 0;
+
+      if (quantity === 0) return 'bg-red-100 text-red-800';
+      if (quantity <= minStock) return 'bg-yellow-100 text-yellow-800';
+      return 'bg-green-100 text-green-800';
+    },
+
+    getStockStatusText(product) {
+      // Ưu tiên kiểm tra trường status trước
+      if (product.status === 'out of stock') {
+        return 'Out of Stock';
+      }
+      if (product.status === 'in stock') {
+        return 'In Stock';
+      }
+
+      // Nếu không có status hoặc status không rõ ràng, kiểm tra quantity
+      const quantity = product.quantity || 0;
+      const minStock = product.minStockLevel || 0;
+
+      if (quantity === 0) return 'Out of Stock';
+      if (quantity <= minStock) return 'Low Stock';
+      return 'In Stock';
     },
 
     getStockAlertClass(product) {
+      // Ưu tiên kiểm tra trường status trước
+      if (product.status === 'out of stock') {
+        return 'bg-red-100 text-red-800';
+      }
+      if (product.status === 'in stock') {
+        return 'bg-green-100 text-green-800';
+      }
+
+      // Nếu không có status hoặc status không rõ ràng, kiểm tra quantity
       const quantity = product.quantity || 0;
       const minStock = product.minStockLevel || 0;
 
@@ -685,6 +756,15 @@ export default {
     },
 
     getStockAlertText(product) {
+      // Ưu tiên kiểm tra trường status trước
+      if (product.status === 'out of stock') {
+        return 'Out of Stock';
+      }
+      if (product.status === 'in stock') {
+        return 'Good Stock';
+      }
+
+      // Nếu không có status hoặc status không rõ ràng, kiểm tra quantity
       const quantity = product.quantity || 0;
       const minStock = product.minStockLevel || 0;
 
@@ -694,16 +774,22 @@ export default {
     },
 
     debugCheckboxChange(productId, event) {
+      console.log('🔍 CHECKBOX CHANGE EVENT TRIGGERED!');
+      console.log('🔍 Product ID:', productId);
+      console.log('🔍 Event target checked:', event.target.checked);
+      console.log('🔍 Current statusChangeProducts BEFORE:', [...this.statusChangeProducts]);
+
       const isValidId = this.validateProductId(productId);
 
-      console.log('🔍 Checkbox change:', {
+      console.log('🔍 Checkbox change details:', {
         productId: productId,
         checked: event.target.checked,
         type: typeof productId,
         length: productId?.length,
         isValidObjectId: /^[0-9a-fA-F]{24}$/.test(productId),
         isValidId: isValidId,
-        currentSelection: this.statusChangeProducts,
+        currentSelection: [...this.statusChangeProducts],
+        currentSelectionLength: this.statusChangeProducts.length,
       });
 
       // If invalid ID and trying to check, prevent it
@@ -714,12 +800,47 @@ export default {
         this.showMessage('Invalid product ID detected. Please refresh the page.', 'error');
         return false;
       }
+
+      // Log successful selection/deselection
+      if (event.target.checked) {
+        console.log('✅ Product being selected:', productId);
+        // Check if already in array
+        if (this.statusChangeProducts.includes(productId)) {
+          console.log('⚠️ Product already in selection');
+        } else {
+          console.log('✅ Product will be added to selection');
+        }
+      } else {
+        console.log('❌ Product being deselected:', productId);
+        // Check if in array
+        if (this.statusChangeProducts.includes(productId)) {
+          console.log('✅ Product will be removed from selection');
+        } else {
+          console.log('⚠️ Product not in selection');
+        }
+      }
+
+      // Log after a short delay to see the result
+      setTimeout(() => {
+        console.log('🔍 statusChangeProducts AFTER:', [...this.statusChangeProducts]);
+        console.log('🔍 statusChangeProducts length AFTER:', this.statusChangeProducts.length);
+      }, 100);
     },
 
     validateProductId(id) {
-      if (!id || typeof id !== 'string') return false;
-      if (!/^[0-9a-fA-F]{24}$/.test(id)) return false;
-      if (id === '000000000000000000000000') return false;
+      if (!id || typeof id !== 'string') {
+        console.log('❌ Invalid ID - not string:', id, typeof id);
+        return false;
+      }
+      if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+        console.log('❌ Invalid ID - wrong format:', id);
+        return false;
+      }
+      if (id === '000000000000000000000000') {
+        console.log('❌ Invalid ID - null ObjectId:', id);
+        return false;
+      }
+      console.log('✅ Valid ID:', id);
       return true;
     },
 

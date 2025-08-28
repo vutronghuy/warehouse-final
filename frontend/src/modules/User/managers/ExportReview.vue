@@ -9,7 +9,7 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Filters -->
         <div class="bg-white shadow rounded-lg p-6 mb-6">
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
               <select
@@ -64,47 +64,119 @@
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
                 <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    #
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Customer
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    phone
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Staff
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created
+                  </th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
                 <tr v-for="(receipt, idx) in exportReceipts" :key="receipt._id" class="hover:bg-gray-50">
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ idx + 1 }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {{ (currentPage - 1) * 8 + idx + 1 }}
+                  </td>
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm font-medium text-gray-900">{{ receipt.customerName }}</div>
+                    <div class="flex items-center gap-3">
+                      <div
+                        class="w-10 h-10 bg-gradient-to-br from-[#6A4C93] to-[#8E63B9] rounded-full flex items-center justify-center text-white font-semibold"
+                      >
+                        {{ getUserInitials(receipt.customerName) }}
+                      </div>
+                      <div class="text-sm font-medium text-gray-900">{{ receipt.customerName }}</div>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div class="text-sm text-gray-500">{{ receipt.customerPhone }}</div>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ getStaffName(receipt.createdByStaff) }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${{ safeAmount(receipt.totalAmount) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ getStaffName(receipt.createdByStaff) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${{ safeAmount(receipt.totalAmount) }}
+                  </td>
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <span :class="getStatusClass(receipt.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
+                    <span
+                      :class="getStatusClass(receipt.status)"
+                      class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                    >
                       {{ getStatusText(receipt.status) }}
                     </span>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(receipt.createdAt) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ formatDate(receipt.createdAt) }}
+                  </td>
                   <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                    <button @click="viewReceipt(receipt)" class="text-blue-600 hover:text-blue-900">View</button>
-                    <button v-if="receipt.status === 'created'" @click="reviewReceipt(receipt, 'approve')" class="text-green-600 hover:text-green-900">Approve</button>
-                    <button v-if="receipt.status === 'created'" @click="reviewReceipt(receipt, 'reject')" class="text-red-600 hover:text-red-900">Reject</button>
+                    <button @click="viewReceipt(receipt)" class="text-blue-600 hover:text-blue-900">
+                      View
+                    </button>
+                    <button
+                      v-if="receipt.status === 'created'"
+                      @click="reviewReceipt(receipt, 'approve')"
+                      class="text-green-600 hover:text-green-900"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      v-if="receipt.status === 'created'"
+                      @click="reviewReceipt(receipt, 'reject')"
+                      class="text-red-600 hover:text-red-900"
+                    >
+                      Reject
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <!-- Pagination -->
+          <!-- Simple Pagination -->
           <div v-if="pagination && pagination.totalPages > 1" class="px-6 py-4 border-t border-gray-200">
             <div class="flex items-center justify-between">
-              <div class="text-sm text-gray-700">Showing {{ (pagination.currentPage - 1) * 10 + 1 }} to {{ Math.min(pagination.currentPage * 10, pagination.totalReceipts) }} of {{ pagination.totalReceipts }} results</div>
-              <div class="flex space-x-2">
-                <button @click="changePage(pagination.currentPage - 1)" :disabled="!pagination.hasPrev" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                <button @click="changePage(pagination.currentPage + 1)" :disabled="!pagination.hasNext" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+              <div class="text-sm text-gray-700">
+                Showing {{ (pagination.currentPage - 1) * 8 + 1 }} to
+                {{ Math.min(pagination.currentPage * 8, pagination.totalReceipts) }} of
+                {{ pagination.totalReceipts }} results
+              </div>
+              <div class="flex items-center space-x-4">
+                <span class="text-sm text-gray-700">
+                  Page {{ pagination.currentPage }} of {{ pagination.totalPages }}
+                </span>
+                <div class="flex space-x-2">
+                  <button
+                    @click="changePage(pagination.currentPage - 1)"
+                    :disabled="!pagination.hasPrev"
+                    class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    @click="changePage(pagination.currentPage + 1)"
+                    :disabled="!pagination.hasNext"
+                    class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -141,7 +213,9 @@
         />
 
         <!-- Success/Error Messages -->
-        <div v-if="message" :class="messageClass" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50">{{ message }}</div>
+        <div v-if="message" :class="messageClass" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50">
+          {{ message }}
+        </div>
       </div>
     </div>
   </div>
@@ -212,7 +286,11 @@ export default {
         console.error('❌ Error loading user info:', error);
         const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
         if (storedUser) {
-          try { this.userInfo = JSON.parse(storedUser); } catch (e) { console.error(e); }
+          try {
+            this.userInfo = JSON.parse(storedUser);
+          } catch (e) {
+            console.error(e);
+          }
         }
       }
     },
@@ -221,7 +299,7 @@ export default {
       this.isLoading = true;
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        const params = { page: this.currentPage, limit: 10 };
+        const params = { page: this.currentPage, limit: 8 }; // Fixed 8 items per page
         if (this.filters.status) params.status = this.filters.status;
         if (this.filters.search) params.search = this.filters.search;
 
@@ -286,6 +364,15 @@ export default {
       this.reviewComment = '';
     },
 
+    getUserInitials(name) {
+      if (!name) return 'NA';
+      return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    },
     // open review from inside view modal
     openReviewFromView(action) {
       this.reviewAction = action;
@@ -391,8 +478,8 @@ export default {
     getProductPrice(product) {
       if (!product) return '0.00';
       if (typeof product === 'object') {
-        const p = product.basePrice ?? product.price ?? product.amount;
-        return (p !== undefined && !isNaN(parseFloat(p))) ? parseFloat(p).toFixed(2) : '0.00';
+        const p = product.finalPrice ?? product.basePrice ?? product.price ?? product.amount;
+        return p !== undefined && !isNaN(parseFloat(p)) ? parseFloat(p).toFixed(2) : '0.00';
       }
       if (typeof product === 'number') return product.toFixed(2);
       if (typeof product === 'string' && !isNaN(parseFloat(product))) return parseFloat(product).toFixed(2);
@@ -419,11 +506,15 @@ export default {
     showMessage(text, type) {
       this.message = text;
       this.messageType = type;
-      setTimeout(() => { this.message = ''; }, 5000);
+      setTimeout(() => {
+        this.message = '';
+      }, 5000);
     },
 
     // defensive closeDropdown in case other parts call it (prevents undefined)
-    closeDropdown() { /* noop or toggle user menu if exists */ },
+    closeDropdown() {
+      /* noop or toggle user menu if exists */
+    },
   },
 };
 </script>

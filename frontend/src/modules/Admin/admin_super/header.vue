@@ -78,19 +78,26 @@ export default {
   data() {
     return {
       isDropdownOpen: false,
+      currentUser: null, // Cache user info
     };
   },
   computed: {
     userFullName() {
-      const u = this.currentUserObj || this._loadUserFromStorage();
-      if (!u) return 'User';
+      // Use cached user or load from storage
+      const u = this.currentUser || this._loadUserFromStorage();
+      if (!u) return 'Super Admin';
+
+      // Check for different user roles
       if (u.admin && u.admin.fullName) return u.admin.fullName;
       if (u.manager && u.manager.fullName) return u.manager.fullName;
       if (u.staff && u.staff.fullName) return u.staff.fullName;
       if (u.accounter && u.accounter.fullName) return u.accounter.fullName;
+
+      // Fallback to direct properties
       if (u.fullName) return u.fullName;
       if (u.name) return u.name;
-      return 'User';
+
+      return 'Super Admin';
     },
     userInitials() {
       const name = this.userFullName;
@@ -102,6 +109,10 @@ export default {
         .slice(0, 2);
     },
   },
+  mounted() {
+    // Load user info when component mounts
+    this.currentUser = this._loadUserFromStorage();
+  },
   methods: {
     toggleDropdown() {
       this.isDropdownOpen = !this.isDropdownOpen;
@@ -112,8 +123,19 @@ export default {
     _loadUserFromStorage() {
       try {
         const raw = localStorage.getItem('user') || sessionStorage.getItem('user');
-        return raw ? JSON.parse(raw) : null;
+        if (!raw) return null;
+
+        const user = JSON.parse(raw);
+        console.log('📱 Loaded user from storage:', user);
+
+        // Cache the user info
+        if (!this.currentUser) {
+          this.currentUser = user;
+        }
+
+        return user;
       } catch (e) {
+        console.error('❌ Error loading user from storage:', e);
         return null;
       }
     },

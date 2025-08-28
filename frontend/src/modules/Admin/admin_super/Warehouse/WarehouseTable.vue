@@ -6,7 +6,6 @@
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
       <Headers />
-
       <!-- Page Content -->
       <main class="flex-1 overflow-auto bg-gray-50 p-8">
         <!-- Page Header -->

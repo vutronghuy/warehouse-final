@@ -102,7 +102,7 @@ exports.createExportReceipt = async (req, res, next) => {
         quantity: parseInt(quantity)
       });
 
-      totalAmount += product.basePrice * quantity;
+      totalAmount += (product.finalPrice || product.basePrice) * quantity;
     }
 
     // Generate receipt number
@@ -128,7 +128,7 @@ exports.createExportReceipt = async (req, res, next) => {
     await exportReceipt.populate([
       { path: 'warehouseId', select: 'name location' },
       { path: 'createdByStaff', select: 'staff.fullName' },
-      { path: 'details.productId', select: 'name sku basePrice' }
+      { path: 'details.productId', select: 'name sku basePrice finalPrice priceMarkupPercent' }
     ]);
 
     res.status(201).json({
@@ -195,7 +195,7 @@ exports.getExportReceipts = async (req, res, next) => {
       .populate('createdByStaff', 'staff.fullName')
       .populate('managerReview.reviewedBy', 'manager.fullName')
       .populate('adminApproval.approvedBy', 'admin.fullName')
-      .populate('details.productId', 'name sku basePrice')
+      .populate('details.productId', 'name sku basePrice finalPrice priceMarkupPercent')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
@@ -277,7 +277,7 @@ exports.getConfirmedExportReceipts = async (req, res, next) => {
     const exportReceipts = await ExportReceipt.find(filter)
       .populate('warehouseId', 'name location')
       .populate('createdByStaff', 'staff.fullName')
-      .populate('details.productId', 'name sku basePrice unit')
+      .populate('details.productId', 'name sku basePrice finalPrice priceMarkupPercent unit')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
@@ -314,7 +314,7 @@ exports.getExportReceiptById = async (req, res, next) => {
       .populate('createdByStaff', 'staff.fullName')
       .populate('managerReview.reviewedBy', 'manager.fullName')
       .populate('adminApproval.approvedBy', 'admin.fullName')
-      .populate('details.productId', 'name sku basePrice quantity')
+      .populate('details.productId', 'name sku basePrice finalPrice priceMarkupPercent quantity')
       .lean();
 
     if (!exportReceipt) {
@@ -424,7 +424,7 @@ exports.managerReviewReceipt = async (req, res, next) => {
       { path: 'warehouseId', select: 'name location' },
       { path: 'createdByStaff', select: 'staff.fullName' },
       { path: 'managerReview.reviewedBy', select: 'manager.fullName' },
-      { path: 'details.productId', select: 'name sku basePrice' }
+      { path: 'details.productId', select: 'name sku basePrice finalPrice priceMarkupPercent' }
     ]);
 
     res.json({
@@ -521,7 +521,7 @@ exports.adminApproveReceipt = async (req, res, next) => {
       { path: 'createdByStaff', select: 'staff.fullName' },
       { path: 'managerReview.reviewedBy', select: 'manager.fullName' },
       { path: 'adminApproval.approvedBy', select: 'admin.fullName' },
-      { path: 'details.productId', select: 'name sku basePrice' }
+      { path: 'details.productId', select: 'name sku basePrice finalPrice priceMarkupPercent' }
     ]);
 
     res.json({
@@ -604,7 +604,7 @@ exports.updateExportReceipt = async (req, res, next) => {
           quantity: parseInt(quantity)
         });
 
-        totalAmount += product.basePrice * quantity;
+        totalAmount += (product.finalPrice || product.basePrice) * quantity;
       }
 
       exportReceipt.details = validatedDetails;
@@ -633,7 +633,7 @@ exports.updateExportReceipt = async (req, res, next) => {
     await exportReceipt.populate([
       { path: 'warehouseId', select: 'name location' },
       { path: 'createdByStaff', select: 'staff.fullName' },
-      { path: 'details.productId', select: 'name sku basePrice' }
+      { path: 'details.productId', select: 'name sku basePrice finalPrice priceMarkupPercent' }
     ]);
 
     res.json({

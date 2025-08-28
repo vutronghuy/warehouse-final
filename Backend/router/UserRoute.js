@@ -14,11 +14,6 @@ router.post('/assign-warehouse', verifyToken, requireSuperAdmin, userController.
 // Password reset by admin (separate from edit user)
 router.post('/:id/reset-password', verifyToken, requireSuperAdmin, userController.adminResetUserPassword);
 
-// Test endpoint
-// router.get('/test', (req, res) => {
-//   res.json({ message: 'User route is working!', timestamp: new Date() });
-// });
-
 // Routes dành cho cả Admin và Super Admin (để xem thông tin)
 router.get('/', verifyToken, userController.getAllUsers);
 router.get('/:id', verifyToken, userController.getUserById);

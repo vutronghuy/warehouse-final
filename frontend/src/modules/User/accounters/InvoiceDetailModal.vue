@@ -6,7 +6,12 @@
           <h3 class="text-lg font-medium text-gray-900">Invoice Details</h3>
           <button @click="close" class="text-gray-400 hover:text-gray-600">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
             </svg>
           </button>
         </div>
@@ -44,13 +49,17 @@
                   <tr>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      Unit Price
+                    </th>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
                   </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                   <tr v-for="detail in invoice.details || []" :key="detail._id || detail.productId">
-                    <td class="px-4 py-2 text-sm text-gray-900">{{ detail.productName || detail.product?.name || detail.productId }}</td>
+                    <td class="px-4 py-2 text-sm text-gray-900">
+                      {{ detail.productName || detail.product?.name || detail.productId }}
+                    </td>
                     <td class="px-4 py-2 text-sm text-gray-500">{{ detail.quantity }}</td>
                     <td class="px-4 py-2 text-sm text-gray-500">{{ formatCurrency(detail.unitPrice) }}</td>
                     <td class="px-4 py-2 text-sm text-gray-900">{{ formatCurrency(detail.totalPrice) }}</td>
@@ -90,8 +99,17 @@
           <div v-if="invoice.accounterReview?.reviewedBy">
             <h4 class="font-medium text-gray-900 mb-2">Review History</h4>
             <div class="bg-gray-50 p-3 rounded text-sm">
-              <div><span class="font-medium">Reviewed by:</span> {{ invoice.accounterReview.reviewedBy?.accounter?.fullName || invoice.accounterReview.reviewedBy }}</div>
-              <div><span class="font-medium">Reviewed at:</span> {{ formatDateTime(invoice.accounterReview.reviewedAt) }}</div>
+              <div>
+                <span class="font-medium">Reviewed by:</span>
+                {{
+                  invoice.accounterReview.reviewedBy?.accounter?.fullName ||
+                  invoice.accounterReview.reviewedBy
+                }}
+              </div>
+              <div>
+                <span class="font-medium">Reviewed at:</span>
+                {{ formatDateTime(invoice.accounterReview.reviewedAt) }}
+              </div>
               <div v-if="invoice.accounterReview.comment">
                 <span class="font-medium">Comment:</span> {{ invoice.accounterReview.comment }}
               </div>
@@ -99,42 +117,40 @@
           </div>
         </div>
 
-        <div v-else class="text-center py-12 text-gray-500">
-          Loading invoice details...
-        </div>
+        <div v-else class="text-center py-12 text-gray-500">Loading invoice details...</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed } from 'vue';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
-  invoice: { type: Object, default: null }
-})
+  invoice: { type: Object, default: null },
+});
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close']);
 
 function close() {
-  emit('close')
+  emit('close');
 }
 
 function formatDate(dateString) {
-  if (!dateString) return ''
-  const d = new Date(dateString)
-  return isNaN(d) ? '' : d.toLocaleDateString('vi-VN')
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  return isNaN(d) ? '' : d.toLocaleDateString('vi-VN');
 }
 
 function formatDateTime(dateString) {
-  if (!dateString) return ''
-  const d = new Date(dateString)
-  return isNaN(d) ? '' : d.toLocaleString('vi-VN')
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  return isNaN(d) ? '' : d.toLocaleString('vi-VN');
 }
 
 function formatCurrency(amount) {
-  const n = Number(amount || 0)
-  return new Intl.NumberFormat('vi-VN').format(n)
+  const n = Number(amount || 0);
+  return new Intl.NumberFormat('vi-VN').format(n);
 }
 </script>

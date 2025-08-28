@@ -49,6 +49,31 @@ exports.requireAdmin = (req, res, next) => {
   next();
 };
 
+// Middleware cho admin hoặc super admin
+exports.requireAdminOrSuperAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ ok: false, message: 'Authentication required.' });
+  }
+  // Allow both admin and super admin
+  if (req.user.role !== 'admin' && !req.user.isSuperAdmin) {
+    return res.status(403).json({ ok: false, message: 'Access denied. Admin or Super admin only.' });
+  }
+  next();
+};
+
+// Middleware cho staff trở lên (staff, manager, admin, super admin)
+exports.requireStaffOrAbove = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ ok: false, message: 'Authentication required.' });
+  }
+
+  const allowedRoles = ['staff', 'manager', 'admin', 'accounter'];
+  if (!allowedRoles.includes(req.user.role) && !req.user.isSuperAdmin) {
+    return res.status(403).json({ ok: false, message: 'Access denied. Staff level or above required.' });
+  }
+  next();
+};
+
 // Middleware để kiểm tra admin có quyền quản lý warehouse cụ thể
 exports.requireWarehouseAccess = (warehouseIdParam = 'warehouseId') => {
   return async (req, res, next) => {

@@ -23,7 +23,7 @@
             <!-- User Info -->
             <div class="hidden md:block text-left">
               <div class="text-sm font-medium text-gray-900">{{ userFullName }}</div>
-              <div class="text-xs text-gray-500">Manager</div>
+              <div class="text-xs text-gray-500">Staff</div>
             </div>
             <!-- Dropdown Arrow -->
             <svg

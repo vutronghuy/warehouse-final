@@ -47,7 +47,7 @@ exports.createInvoiceFromExport = async (req, res, next) => {
     // Find and validate export receipt
     console.log('🔍 Looking for export receipt:', exportReceiptId);
     const exportReceipt = await ExportReceipt.findById(exportReceiptId)
-      .populate('details.productId', 'name sku basePrice')
+      .populate('details.productId', 'name sku finalPrice basePrice priceMarkupPercent')
       .lean();
 
     if (!exportReceipt) {
@@ -93,15 +93,26 @@ exports.createInvoiceFromExport = async (req, res, next) => {
     // Generate invoice number
     const invoiceNumber = await Invoice.generateInvoiceNumber();
 
+    // Exchange rates (USD as base currency)
+    const exchangeRates = {
+      USD: 1,
+      VND: 26363, // 1 USD ≈ 26,363 VND
+      EUR: 0.86   // 1 USD ≈ 0.86 EUR
+    };
+
+    // Get exchange rate for selected currency
+    const exchangeRate = exchangeRates[currency] || 1;
+
     // Prepare invoice details from export receipt
     let totalAmount = 0;
     const invoiceDetails = [];
 
     for (const detail of exportReceipt.details) {
       const product = detail.productId;
-      const unitPrice = product.basePrice;
+      const unitPriceUSD = product.finalPrice; // Price in USD
+      const unitPrice = unitPriceUSD * exchangeRate; // Convert to selected currency
       const totalPrice = unitPrice * detail.quantity;
-      
+
       invoiceDetails.push({
         productId: product._id,
         productName: product.name,
@@ -237,7 +248,7 @@ exports.getInvoices = async (req, res, next) => {
       .populate('createdByStaff', 'staff.fullName')
       .populate('accounterReview.reviewedBy', 'accounter.fullName')
       .populate('exportReceiptId', 'receiptNumber')
-      .populate('details.productId', 'name sku')
+      .populate('details.productId', 'name sku finalPrice')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -288,7 +299,7 @@ exports.getInvoiceById = async (req, res, next) => {
       .populate('createdByStaff', 'staff.fullName staff.email')
       .populate('accounterReview.reviewedBy', 'accounter.fullName accounter.email')
       .populate('exportReceiptId', 'receiptNumber customerName customerPhone customerAddress')
-      .populate('details.productId', 'name sku basePrice')
+      .populate('details.productId', 'name sku finalPrice basePrice priceMarkupPercent')
       .lean(); // Thêm lean() để tối ưu performance
 
     if (!invoice || invoice.deletedAt) {
@@ -461,7 +472,55 @@ exports.updateInvoice = async (req, res, next) => {
       });
     }
 
-    // Update fields
+    // Exchange rates (USD as base currency)
+    const exchangeRates = {
+      USD: 1,
+      VND: 26363, // 1 USD ≈ 26,363 VND
+      EUR: 0.86   // 1 USD ≈ 0.86 EUR
+    };
+
+    // Check if currency is changing and recalculate prices
+    const oldCurrency = invoice.currency;
+    const newCurrency = currency || oldCurrency;
+    const currencyChanged = oldCurrency !== newCurrency;
+
+    if (currencyChanged) {
+      // Convert prices from old currency back to USD, then to new currency
+      const oldRate = exchangeRates[oldCurrency] || 1;
+      const newRate = exchangeRates[newCurrency] || 1;
+
+      // Recalculate invoice details
+      let newTotalAmount = 0;
+      const updatedDetails = invoice.details.map(detail => {
+        // Convert unit price back to USD, then to new currency
+        const unitPriceUSD = detail.unitPrice / oldRate;
+        const newUnitPrice = unitPriceUSD * newRate;
+        const newTotalPrice = newUnitPrice * detail.quantity;
+
+        newTotalAmount += newTotalPrice;
+
+        return {
+          ...detail.toObject(),
+          unitPrice: newUnitPrice,
+          totalPrice: newTotalPrice
+        };
+      });
+
+      // Update invoice details and amounts
+      invoice.details = updatedDetails;
+      invoice.totalAmount = newTotalAmount;
+
+      // Recalculate VAT and final amount with new VAT rate if provided
+      const currentVatRate = vatRate !== undefined ? vatRate : invoice.vatRate;
+      invoice.vatAmount = (newTotalAmount * currentVatRate) / 100;
+      invoice.finalAmount = newTotalAmount + invoice.vatAmount;
+    } else if (vatRate !== undefined && vatRate !== invoice.vatRate) {
+      // Only VAT rate changed, recalculate VAT amounts
+      invoice.vatAmount = (invoice.totalAmount * vatRate) / 100;
+      invoice.finalAmount = invoice.totalAmount + invoice.vatAmount;
+    }
+
+    // Update other fields
     if (paymentCondition) invoice.paymentCondition = paymentCondition;
     if (currency) invoice.currency = currency;
     if (note !== undefined) invoice.note = note?.trim() || '';

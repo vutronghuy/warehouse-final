@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Invoice Currency Conversion Demo</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div id="app">
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-6">Edit Invoice Currency Conversion Demo</h1>
+            
+            <!-- Original Invoice Info -->
+            <div class="mb-6 p-4 bg-blue-50 rounded-lg">
+                <h3 class="font-medium text-blue-900 mb-2">Original Invoice</h3>
+                <p class="text-sm text-blue-700">
+                    Created in: <strong>{{ originalCurrency }}</strong> | 
+                    Total: <strong>{{ formatCurrency(originalTotal, originalCurrency) }}</strong>
+                </p>
+            </div>
+
+            <!-- Edit Form -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Payment Condition:</label>
+                    <select v-model="editForm.paymentCondition" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="cash">Cash</option>
+                        <option value="net15">Net 15 days</option>
+                        <option value="net30">Net 30 days</option>
+                        <option value="net45">Net 45 days</option>
+                        <option value="net60">Net 60 days</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Currency:</label>
+                    <select v-model="editForm.currency" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="VND">VND - Vietnamese Dong</option>
+                        <option value="EUR">EUR - Euro</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">VAT Rate (%):</label>
+                    <input v-model.number="editForm.vatRate" type="number" min="0" max="100" step="0.1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+            </div>
+
+            <!-- Invoice Preview with Currency Conversion -->
+            <div class="border rounded-lg p-4 bg-gray-50">
+                <h4 class="font-medium text-gray-900 mb-3">Updated Invoice Preview</h4>
+                
+                <!-- Products Table -->
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="(product, idx) in convertedProducts" :key="idx">
+                                <td class="px-3 py-2 text-sm text-gray-900">{{ idx + 1 }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-900">{{ product.name }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-500">{{ product.quantity }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-500">
+                                    {{ formatCurrency(product.convertedUnitPrice, editForm.currency) }}
+                                </td>
+                                <td class="px-3 py-2 text-sm text-gray-900">
+                                    {{ formatCurrency(product.convertedTotalPrice, editForm.currency) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Totals -->
+                <div class="mt-4 flex justify-end">
+                    <div class="w-64 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>Subtotal:</span>
+                            <span class="font-medium">{{ formatCurrency(convertedSubtotal, editForm.currency) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>VAT ({{ editForm.vatRate }}%):</span>
+                            <span class="font-medium">{{ formatCurrency(convertedVatAmount, editForm.currency) }}</span>
+                        </div>
+                        <div class="flex justify-between font-medium border-t pt-2">
+                            <span>Total:</span>
+                            <span class="font-semibold">{{ formatCurrency(convertedTotal, editForm.currency) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversion Info -->
+            <div class="mt-6 p-4 bg-green-50 rounded-lg">
+                <h4 class="font-medium text-green-900 mb-2">Conversion Information</h4>
+                <div class="text-sm text-green-700">
+                    <p v-if="editForm.currency !== originalCurrency">
+                        <strong>Currency Conversion:</strong> 
+                        1 {{ originalCurrency }} = {{ exchangeRates[editForm.currency] }} {{ editForm.currency }}
+                    </p>
+                    <p v-else>
+                        <strong>No currency conversion needed</strong> (same currency)
+                    </p>
+                    <p class="mt-1">
+                        <strong>VAT Rate:</strong> {{ editForm.vatRate }}%
+                        <span v-if="editForm.vatRate !== originalVatRate" class="text-orange-600">
+                            (changed from {{ originalVatRate }}%)
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                // Original invoice data (simulating existing invoice)
+                const originalCurrency = ref('USD');
+                const originalVatRate = ref(10);
+                const originalTotal = ref(1375); // $1,375 USD
+
+                // Edit form
+                const editForm = ref({
+                    paymentCondition: 'net30',
+                    currency: 'USD',
+                    vatRate: 10
+                });
+
+                // Exchange rates (USD as base currency)
+                const exchangeRates = {
+                    USD: 1,
+                    VND: 26363, // 1 USD ≈ 26,363 VND
+                    EUR: 0.86   // 1 USD ≈ 0.86 EUR
+                };
+
+                // Original products data (in USD)
+                const originalProducts = ref([
+                    {
+                        name: 'Laptop Dell XPS 13',
+                        quantity: 1,
+                        unitPriceUSD: 1200, // $1,200 USD
+                        totalPriceUSD: 1200
+                    },
+                    {
+                        name: 'Wireless Mouse',
+                        quantity: 2,
+                        unitPriceUSD: 25, // $25 USD
+                        totalPriceUSD: 50
+                    }
+                ]);
+
+                // Computed properties for converted prices
+                const convertedProducts = computed(() => {
+                    const oldRate = exchangeRates[originalCurrency.value];
+                    const newRate = exchangeRates[editForm.value.currency];
+                    
+                    return originalProducts.value.map(product => {
+                        // Convert from original currency to USD, then to new currency
+                        const unitPriceUSD = product.unitPriceUSD / oldRate;
+                        const convertedUnitPrice = unitPriceUSD * newRate;
+                        const convertedTotalPrice = convertedUnitPrice * product.quantity;
+                        
+                        return {
+                            ...product,
+                            convertedUnitPrice,
+                            convertedTotalPrice
+                        };
+                    });
+                });
+
+                const convertedSubtotal = computed(() => {
+                    return convertedProducts.value.reduce((sum, product) => {
+                        return sum + product.convertedTotalPrice;
+                    }, 0);
+                });
+
+                const convertedVatAmount = computed(() => {
+                    return convertedSubtotal.value * (editForm.value.vatRate / 100);
+                });
+
+                const convertedTotal = computed(() => {
+                    return convertedSubtotal.value + convertedVatAmount.value;
+                });
+
+                // Helper function
+                function formatCurrency(amount, currency) {
+                    const n = Number(amount || 0);
+                    
+                    switch (currency) {
+                        case 'USD':
+                            return `$${n.toFixed(2)}`;
+                        case 'VND':
+                            return `${n.toLocaleString()} VND`;
+                        case 'EUR':
+                            return `€${n.toFixed(2)}`;
+                        default:
+                            return n.toFixed(2);
+                    }
+                }
+
+                return {
+                    originalCurrency,
+                    originalVatRate,
+                    originalTotal,
+                    editForm,
+                    exchangeRates,
+                    originalProducts,
+                    convertedProducts,
+                    convertedSubtotal,
+                    convertedVatAmount,
+                    convertedTotal,
+                    formatCurrency
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

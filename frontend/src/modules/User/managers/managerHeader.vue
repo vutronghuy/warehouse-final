@@ -2,7 +2,7 @@
  <div class="ml-64 bg-white shadow-sm border-b border-gray-200">
     <div class="flex justify-between items-center px-8 py-4">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Admin</h1>
+        <h1 class="text-2xl font-bold text-gray-900">Manager</h1>
         <p class="text-sm text-gray-600">
           Welcome back, <span class="text-blue-700">{{ userFullName }}</span>
         </p>

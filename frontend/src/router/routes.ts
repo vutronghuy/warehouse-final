@@ -7,6 +7,7 @@ import Admin_Super from '@/modules/Admin/admin_super/SuperAdmin.vue';
 import SuperAdminDashboard from '@/modules/Admin/admin_super/Dashboard.vue';
 import SupplierTable from '@/modules/Admin/admin_super/Supplier/SupplierTable.vue';
 import CategoryTable from '@/modules/Admin/admin_super/Category/CategoryTable.vue';
+import CustomerTable from '@/modules/Admin/admin_super/Customer/CustomerTable.vue';
 import ProductTable from '@/modules/Admin/admin_super/Product/ProductTable.vue';
 import WarehouseTable from '@/modules/Admin/admin_super/Warehouse/WarehouseTable.vue';
 import Login from '@/modules/Auth/Login.vue';
@@ -38,12 +39,6 @@ const routes: RouteRecordRaw[] = [
     name: RouteName.NotFound,
     component: NotFound,
   },
-  // {
-  //   path: '',
-  //   name: RouteName.HOMEPAGE,
-  //   component: Homepage,
-  //   meta: { layout: 'defaultNoHeader' },
-  // },
   {
     path: '/Superadmin',
     name: RouteName.ADMIN_SUPER,
@@ -69,6 +64,13 @@ const routes: RouteRecordRaw[] = [
     path: '/Superadmin/categories',
     name: 'SuperAdminCategories',
     component: CategoryTable, // Trang CRUD categories
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireSuperAdmin,
+  },
+  {
+    path: '/Superadmin/customers',
+    name: 'SuperAdminCustomers',
+    component: CustomerTable, // Trang CRUD customers
     meta: { layout: 'defaultNoHeader' },
     beforeEnter: requireSuperAdmin,
   },
@@ -104,6 +106,13 @@ const routes: RouteRecordRaw[] = [
     path: '/admin/products',
     name: 'AdminProducts',
     component: () => import('../modules/Admin/Admin/ProductManagement.vue'), // Admin Product Management
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireAdmin,
+  },
+    {
+    path: '/admin/dashboard',
+    name: 'AdminDashboard',
+    component: () => import('../modules/Admin/Admin/AdminDashboard.vue'), // Admin Product Management
     meta: { layout: 'defaultNoHeader' },
     beforeEnter: requireAdmin,
   },

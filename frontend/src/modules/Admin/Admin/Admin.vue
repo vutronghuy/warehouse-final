@@ -73,7 +73,16 @@
                 </td>
 
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                  {{ getUserName(user) }}
+                  <div class="flex items-center">
+                    <div
+                      class="w-10 h-10 bg-gradient-to-br from-[#6A4C93] to-[#8E63B9] rounded-full flex items-center justify-center text-white font-semibold"
+                    >
+                      {{ getUserInitials(user) }}
+                    </div>
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-gray-900">{{ getUserName(user) }}</div>
+                    </div>
+                  </div>
                 </td>
 
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -180,6 +189,7 @@ export default {
       currentPage: 1,
       showUserMenu: false,
       currentUserObj: null,
+      warehouses: [],
     };
   },
   computed: {
@@ -249,6 +259,7 @@ export default {
 
     // fetch users according to admin's managed warehouses if possible
     this.fetchUsers();
+    this.fetchWarehouses();
   },
   mounted() {
     document.addEventListener('click', this.handleDocClick);
@@ -303,20 +314,29 @@ export default {
       return '—';
     },
 
-    getUserWarehouse(u) {
-      // show warehouse id (string) for manager/staff, else dash
-      if (!u) return '—';
-      const wid =
-        u.manager && u.manager.warehouseId
-          ? u.manager.warehouseId
-          : u.staff && u.staff.warehouseId
-            ? u.staff.warehouseId
-            : u.accounter && u.accounter.warehouseId
-              ? u.accounter.warehouseId
-              : null;
-      return wid ? String(wid) : '—';
+    getUserInitials(user) {
+      const name = this.getUserName(user);
+      return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
     },
 
+    getUserWarehouse(u) {
+      if (!u) return '—';
+      if (!this.warehouses || !Array.isArray(this.warehouses)) return '—';
+
+      const warehouseId = u.manager?.warehouseId || u.staff?.warehouseId || u.accounter?.warehouseId;
+      if (!warehouseId) return '—';
+
+      // Xử lý trường hợp warehouseId là object
+      const wId = typeof warehouseId === 'object' ? warehouseId._id : warehouseId;
+      const warehouse = this.warehouses.find((w) => w._id === wId);
+
+      return warehouse ? warehouse.name : '—';
+    },
     async fetchUsers() {
       try {
         // ensure header present (defensive)
@@ -394,6 +414,15 @@ export default {
       }
     },
 
+    async fetchWarehouses() {
+      try {
+        const response = await axios.get('/api/warehouses');
+        this.warehouses = response.data.warehouses || response.data || [];
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+      }
+    },
+
     goToPage(p) {
       let page = p;
       if (page < 1) page = 1;
@@ -407,7 +436,6 @@ export default {
     nextPage() {
       if (this.currentPage < this.totalPages) this.currentPage++;
     },
-
   },
 };
 </script>

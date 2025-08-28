@@ -101,6 +101,22 @@ router.put('/bulk-status', (req, res, next) => {
   next();
 }, verifyToken, requireAdminOrSuperAdmin, productController.bulkUpdateStatus);
 
+// PUT /api/products/bulk-min-stock - Bulk update min stock level (Admin and Super Admin only)
+router.put('/bulk-min-stock', (req, res, next) => {
+  console.log('🎯 BULK-MIN-STOCK ROUTE HIT!');
+  console.log('🎯 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🎯 Request headers:', req.headers);
+  next();
+}, verifyToken, requireAdminOrSuperAdmin, productController.bulkUpdateMinStock);
+
+// PUT /api/products/bulk-pricing - Bulk update product pricing (Admin and Super Admin only)
+router.put('/bulk-pricing', (req, res, next) => {
+  console.log('🎯 BULK-PRICING ROUTE HIT!');
+  console.log('🎯 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🎯 Request headers:', req.headers);
+  next();
+}, verifyToken, requireAdminOrSuperAdmin, productController.bulkUpdatePricing);
+
 // PUT /api/products/min-stock - Update min stock level (Admin and Super Admin only) - MOVED UP
 router.put('/min-stock', (req, res, next) => {
   console.log('🎯 MIN-STOCK ROUTE HIT!');
@@ -130,9 +146,5 @@ router.get('/import/template', verifyToken, requireStaffOrAbove, productControll
 
 // POST /api/products/import - Import products from Excel (Staff can import)
 router.post('/import', verifyToken, requireStaffOrAbove, upload.single('file'), productController.importProducts);
-
-
-
-
 
 module.exports = router;

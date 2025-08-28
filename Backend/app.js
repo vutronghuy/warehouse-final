@@ -53,6 +53,7 @@ app.use((req, res, next) => {
 //router
 app.use('/api/suppliers', supplierRoute)
 app.use('/api/categories', categoryRoute)
+app.use('/api/customers', require('./router/CustomerRoute'))
 app.use('/api/products', productRoute)
 app.use('/api/warehouses', warehouseRoute)
 

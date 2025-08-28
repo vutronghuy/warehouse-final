@@ -8,7 +8,50 @@
       </div>
 
       <div>
-        <button @click="openCreateModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create Export</button>
+        <button
+          @click="openCreateModal"
+          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Create Export
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+          <select
+            v-model="filters.status"
+            @change="onStatusChange"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">All Status</option>
+            <option value="created">Pending</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Search</label>
+          <input
+            v-model="filters.search"
+            @input="debounceSearch"
+            type="text"
+            placeholder="Receipt number or customer..."
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div class="flex items-end">
+          <button
+            @click="resetFilters"
+            class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Reset
+          </button>
+        </div>
       </div>
     </div>
 
@@ -20,32 +63,108 @@
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt #</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Receipt #
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Customer
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Phone
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Created
+              </th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
             <tr v-for="receipt in exportReceipts" :key="receipt._id" class="hover:bg-gray-50">
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ receipt.receiptNumber }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ receipt.customerName }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${{ safeAmount(receipt.totalAmount) }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                {{ receipt.receiptNumber }}
+              </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span :class="getStatusClass(receipt.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
+                <div class="flex items-center gap-3">
+                  <div
+                    class="w-10 h-10 bg-gradient-to-br from-[#6A4C93] to-[#8E63B9] rounded-full flex items-center justify-center text-white font-semibold"
+                  >
+                    {{ getUserInitials(receipt.customerName) }}
+                  </div>
+                  <div class="text-sm font-medium text-gray-900">{{ receipt.customerName }}</div>
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                {{ (receipt.customerPhone) }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                ${{ safeAmount(receipt.totalAmount) }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span
+                  :class="getStatusClass(receipt.status)"
+                  class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                >
                   {{ getStatusText(receipt.status) }}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(receipt.createdAt) }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {{ formatDate(receipt.createdAt) }}
+              </td>
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button @click="openViewModal(receipt)" class="text-blue-600 hover:text-blue-900 mr-3">View</button>
-                <button v-if="receipt.status === 'created' || receipt.status === 'rejected'" @click="openEditModal(receipt)" class="text-green-600 hover:text-green-900">Edit</button>
+                <button @click="openViewModal(receipt)" class="text-blue-600 hover:text-blue-900 mr-3">
+                  View
+                </button>
+                <button
+                  v-if="receipt.status === 'created' || receipt.status === 'rejected'"
+                  @click="openEditModal(receipt)"
+                  class="text-green-600 hover:text-green-900"
+                >
+                  Edit
+                </button>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Simple Pagination -->
+      <div v-if="pagination && pagination.totalPages > 1" class="px-6 py-4 border-t border-gray-200">
+        <div class="flex items-center justify-between">
+          <div class="text-sm text-gray-700">
+            Showing {{ (pagination.currentPage - 1) * 8 + 1 }} to
+            {{ Math.min(pagination.currentPage * 8, pagination.totalReceipts) }} of
+            {{ pagination.totalReceipts }} results
+          </div>
+          <div class="flex items-center space-x-4">
+            <span class="text-sm text-gray-700">
+              Page {{ pagination.currentPage }} of {{ pagination.totalPages }}
+            </span>
+            <div class="flex space-x-2">
+              <button
+                @click="changePage(pagination.currentPage - 1)"
+                :disabled="!pagination.hasPrev"
+                class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                @click="changePage(pagination.currentPage + 1)"
+                :disabled="!pagination.hasNext"
+                class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -56,6 +175,8 @@
     <CreateExportModal
       :visible="showCreateModal"
       :available-products="modalProductsForCreate"
+      :available-categories="categories"
+      :available-customers="customers"
       :is-submitting="isCreating"
       :get-product-price="getProductPrice"
       @close="closeCreateModal"
@@ -113,7 +234,16 @@ export default {
       message: '',
       messageType: '',
       products: [],
+      categories: [], // Thêm categories
+      customers: [], // Thêm customers
       exportReceipts: [],
+      pagination: null,
+      currentPage: 1,
+      filters: {
+        status: '',
+        search: '',
+      },
+      searchTimeout: null,
       // modal states
       showCreateModal: false,
       showViewModal: false,
@@ -127,18 +257,32 @@ export default {
         ? 'bg-green-50 text-green-800 border border-green-200'
         : 'bg-red-50 text-red-800 border border-red-200';
     },
-    // available products for create: all products that have stock > 0
+    // available products for create: all products that are not out of stock
     modalProductsForCreate() {
-      return this.products.slice(); // parent gives full list (create modal will filter by quantity)
+      return this.products
+        .filter((product) => {
+          // Lọc bỏ các sản phẩm có status "out of stock"
+          return product.status !== 'out of stock';
+        })
+        .map((product) => {
+          // Đảm bảo categoryId được populate đúng cách
+          if (product.categoryId && typeof product.categoryId === 'string') {
+            const category = this.categories.find((cat) => cat._id === product.categoryId);
+            if (category) {
+              product.categoryId = category;
+            }
+          }
+          return product;
+        });
     },
     // available products for edit: include products list plus any products referenced in selectedReceipt.details
     modalProductsForEdit() {
       // clone original products to avoid mutating
       const list = this.products.slice();
       if (this.selectedReceipt && Array.isArray(this.selectedReceipt.details)) {
-        this.selectedReceipt.details.forEach(d => {
-          const pid = typeof d.productId === 'object' ? (d.productId._id || d.productId.id) : d.productId;
-          if (pid && !list.find(p => p._id === pid)) {
+        this.selectedReceipt.details.forEach((d) => {
+          const pid = typeof d.productId === 'object' ? d.productId._id || d.productId.id : d.productId;
+          if (pid && !list.find((p) => p._id === pid)) {
             // if receipt used a product object, try to include it
             if (typeof d.productId === 'object') {
               const p = {
@@ -146,7 +290,7 @@ export default {
                 name: d.productId.name || `Product (${pid})`,
                 sku: d.productId.sku || '',
                 quantity: d.productId.quantity ?? 0,
-                basePrice: d.productId.basePrice ?? d.productId.price ?? 0
+                basePrice: d.productId.basePrice ?? d.productId.price ?? 0,
               };
               list.push(p);
             } else {
@@ -161,17 +305,17 @@ export default {
     // small helper: all products union receipts referenced products so create modal can display selected products if needed
     modalProductsAll() {
       const list = this.products.slice();
-      (this.exportReceipts || []).forEach(r => {
-        (r.details || []).forEach(d => {
-          const pid = typeof d.productId === 'object' ? (d.productId._id || d.productId.id) : d.productId;
-          if (pid && !list.find(p => p._id === pid)) {
+      (this.exportReceipts || []).forEach((r) => {
+        (r.details || []).forEach((d) => {
+          const pid = typeof d.productId === 'object' ? d.productId._id || d.productId.id : d.productId;
+          if (pid && !list.find((p) => p._id === pid)) {
             if (typeof d.productId === 'object') {
               list.push({
                 _id: d.productId._id || d.productId.id,
                 name: d.productId.name || `Product (${pid})`,
                 sku: d.productId.sku || '',
                 quantity: d.productId.quantity ?? 0,
-                basePrice: d.productId.basePrice ?? d.productId.price ?? 0
+                basePrice: d.productId.basePrice ?? d.productId.price ?? 0,
               });
             } else {
               list.push({ _id: pid, name: `Product (${pid})`, sku: '', quantity: 0, basePrice: 0 });
@@ -180,10 +324,12 @@ export default {
         });
       });
       return list;
-    }
+    },
   },
   mounted() {
     this.fetchProducts();
+    this.fetchCategories();
+    this.fetchCustomers();
     this.fetchExportReceipts();
   },
   methods: {
@@ -193,7 +339,7 @@ export default {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         const resp = await axios.get('/api/products', {
           params: { all: 'true' },
-          headers: { Authorization: token ? `Bearer ${token}` : undefined }
+          headers: { Authorization: token ? `Bearer ${token}` : undefined },
         });
         this.products = resp.data.products || [];
       } catch (err) {
@@ -202,14 +348,46 @@ export default {
       }
     },
 
+    async fetchCategories() {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const resp = await axios.get('/api/categories/active', {
+          headers: { Authorization: token ? `Bearer ${token}` : undefined },
+        });
+        this.categories = resp.data.categories || [];
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        this.showMessage('Failed to load categories', 'error');
+      }
+    },
+
+    async fetchCustomers() {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const resp = await axios.get('/api/customers/active', {
+          headers: { Authorization: token ? `Bearer ${token}` : undefined },
+        });
+        this.customers = resp.data.customers || [];
+      } catch (err) {
+        console.error('Error fetching customers:', err);
+        this.showMessage('Failed to load customers', 'error');
+      }
+    },
+
     async fetchExportReceipts() {
       this.isLoading = true;
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const params = { page: this.currentPage, limit: 8 }; // 8 items per page
+        if (this.filters.status) params.status = this.filters.status;
+        if (this.filters.search) params.search = this.filters.search;
+
         const resp = await axios.get('/api/export-receipts', {
-          headers: { Authorization: token ? `Bearer ${token}` : undefined }
+          params,
+          headers: { Authorization: token ? `Bearer ${token}` : undefined },
         });
         this.exportReceipts = resp.data.exportReceipts || [];
+        this.pagination = resp.data.pagination;
       } catch (err) {
         console.error('Error fetching export receipts:', err);
         this.showMessage('Failed to load export receipts', 'error');
@@ -219,9 +397,12 @@ export default {
     },
 
     // Create
-    openCreateModal() { this.showCreateModal = true; }
-    ,
-    closeCreateModal() { this.showCreateModal = false; },
+    openCreateModal() {
+      this.showCreateModal = true;
+    },
+    closeCreateModal() {
+      this.showCreateModal = false;
+    },
 
     async handleCreateSubmit(payload) {
       // payload from CreateExportModal: { customerName, customerPhone, customerAddress, notes, details: [{productId, quantity}] }
@@ -229,11 +410,12 @@ export default {
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         const resp = await axios.post('/api/export-receipts', payload, {
-          headers: { Authorization: token ? `Bearer ${token}` : undefined }
+          headers: { Authorization: token ? `Bearer ${token}` : undefined },
         });
         if (resp.data?.success) {
           this.showMessage('Export receipt created successfully!', 'success');
           this.closeCreateModal();
+          this.currentPage = 1; // Reset to first page
           await this.fetchExportReceipts();
           await this.fetchProducts();
         } else {
@@ -282,12 +464,13 @@ export default {
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         const resp = await axios.put(`/api/export-receipts/${this.selectedReceipt._id}`, payload, {
-          headers: { Authorization: token ? `Bearer ${token}` : undefined }
+          headers: { Authorization: token ? `Bearer ${token}` : undefined },
         });
         if (resp.data?.success) {
           const isResubmit = this.selectedReceipt.status === 'rejected';
           this.showMessage(isResubmit ? 'Export receipt resubmitted!' : 'Export receipt updated!', 'success');
           this.closeEditModal();
+          this.currentPage = 1; // Reset to first page
           await this.fetchExportReceipts();
           await this.fetchProducts();
         } else {
@@ -313,17 +496,17 @@ export default {
       if (typeof productIdOrObj === 'object') {
         pid = productIdOrObj._id || productIdOrObj.id;
       }
-      const p = this.products.find(x => x._id === pid);
+      const p = this.products.find((x) => x._id === pid);
       if (p) {
-        const val = p.basePrice ?? p.price ?? 0;
+        const val = p.finalPrice ?? p.basePrice ?? p.price ?? 0;
         return Number(val).toFixed(2);
       }
       // try to find in exportReceipts' details (if product object present there)
       for (const r of this.exportReceipts) {
-        for (const d of (r.details || [])) {
-          const did = typeof d.productId === 'object' ? (d.productId._id || d.productId.id) : d.productId;
+        for (const d of r.details || []) {
+          const did = typeof d.productId === 'object' ? d.productId._id || d.productId.id : d.productId;
           if (did === pid && typeof d.productId === 'object') {
-            const val = d.productId.basePrice ?? d.productId.price ?? 0;
+            const val = d.productId.finalPrice ?? d.productId.basePrice ?? d.productId.price ?? 0;
             return Number(val).toFixed(2);
           }
         }
@@ -336,14 +519,14 @@ export default {
       if (typeof product === 'object') {
         return product.name || `Product (${product._id || product.id || ''})`;
       }
-      const p = this.products.find(x => x._id === product);
+      const p = this.products.find((x) => x._id === product);
       return p ? p.name : `Product (${product})`;
     },
 
     getProductSku(product) {
       if (!product) return 'N/A';
       if (typeof product === 'object') return product.sku || 'N/A';
-      const p = this.products.find(x => x._id === product);
+      const p = this.products.find((x) => x._id === product);
       return p ? p.sku || 'N/A' : 'N/A';
     },
 
@@ -352,7 +535,7 @@ export default {
         created: 'bg-yellow-100 text-yellow-800',
         reviewed: 'bg-blue-100 text-blue-800',
         approved: 'bg-green-100 text-green-800',
-        rejected: 'bg-red-100 text-red-800'
+        rejected: 'bg-red-100 text-red-800',
       };
       return classes[status] || 'bg-gray-100 text-gray-800';
     },
@@ -362,7 +545,7 @@ export default {
         created: 'Pending',
         reviewed: 'Reviewed',
         approved: 'Approved',
-        rejected: 'Rejected'
+        rejected: 'Rejected',
       };
       return texts[status] || status;
     },
@@ -387,6 +570,15 @@ export default {
       return 'Unknown Manager';
     },
 
+    getUserInitials(name) {
+      if (!name) return 'NA';
+      return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    },
     getAdminName(admin) {
       if (!admin) return 'Unknown Admin';
       if (typeof admin === 'string') return admin;
@@ -408,12 +600,44 @@ export default {
       return isNaN(d) ? 'N/A' : d.toLocaleString();
     },
 
+    onStatusChange() {
+      this.currentPage = 1; // Reset to first page when status changes
+      this.fetchExportReceipts();
+    },
+
+    debounceSearch() {
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
+      }
+      this.searchTimeout = setTimeout(() => {
+        this.currentPage = 1; // Reset to first page when searching
+        this.fetchExportReceipts();
+      }, 500);
+    },
+
+    resetFilters() {
+      this.filters.status = '';
+      this.filters.search = '';
+      this.currentPage = 1;
+      this.fetchExportReceipts();
+    },
+
+    changePage(page) {
+      if (!this.pagination) return;
+      if (page >= 1 && page <= this.pagination.totalPages) {
+        this.currentPage = page;
+        this.fetchExportReceipts();
+      }
+    },
+
     showMessage(text, type = 'success') {
       this.message = text;
       this.messageType = type;
-      setTimeout(() => { this.message = ''; }, 5000);
-    }
-  }
+      setTimeout(() => {
+        this.message = '';
+      }, 5000);
+    },
+  },
 };
 </script>
 

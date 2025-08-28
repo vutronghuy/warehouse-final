@@ -660,6 +660,103 @@ exports.updateMinStock = async (req, res, next) => {
   }
 };
 
+// Bulk update min stock level
+exports.bulkUpdateMinStock = async (req, res, next) => {
+  try {
+    console.log('🔄 BULK UPDATE MIN STOCK CALLED!');
+    console.log('🔍 Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 User:', req.user);
+
+    const { productIds, minStockLevel } = req.body;
+
+    // Validation
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+      console.log('❌ Invalid productIds:', productIds);
+      return res.status(400).json({
+        success: false,
+        message: 'Product IDs array is required and must not be empty'
+      });
+    }
+
+    if (minStockLevel === undefined || minStockLevel === null) {
+      console.log('❌ Missing minStockLevel:', minStockLevel);
+      return res.status(400).json({
+        success: false,
+        message: 'Min stock level is required'
+      });
+    }
+
+    const minStockValue = parseInt(minStockLevel);
+    if (isNaN(minStockValue) || minStockValue < 0) {
+      console.log('❌ Invalid minStockLevel value:', minStockLevel);
+      return res.status(400).json({
+        success: false,
+        message: 'Min stock level must be a non-negative number'
+      });
+    }
+
+    console.log('✅ Validation passed. Updating products:', {
+      productIds,
+      minStockLevel: minStockValue,
+      count: productIds.length
+    });
+
+    // Update multiple products
+    const updateResult = await Product.updateMany(
+      { _id: { $in: productIds } },
+      {
+        $set: {
+          minStockLevel: minStockValue,
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    console.log('✅ Bulk update result:', updateResult);
+
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No products found with the provided IDs'
+      });
+    }
+
+    // Get updated products for response
+    const updatedProducts = await Product.find({ _id: { $in: productIds } })
+      .populate('categoryId', 'name')
+      .populate('primarySupplierId', 'name')
+      .populate('warehouseId', 'name location');
+
+    console.log('✅ Bulk min stock update successful:', {
+      requested: productIds.length,
+      matched: updateResult.matchedCount,
+      modified: updateResult.modifiedCount,
+      minStockLevel: minStockValue
+    });
+
+    res.json({
+      success: true,
+      message: `Min stock level updated successfully for ${updateResult.modifiedCount} product${updateResult.modifiedCount > 1 ? 's' : ''}`,
+      updatedCount: updateResult.modifiedCount,
+      products: updatedProducts
+    });
+  } catch (error) {
+    console.error('❌ Error bulk updating min stock level:', error);
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format in the provided list'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while bulk updating min stock level'
+    });
+  }
+};
+
 // Bulk update product status
 exports.bulkUpdateStatus = async (req, res, next) => {
   try {
@@ -837,6 +934,103 @@ exports.testObjectIdValidation = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message
+    });
+  }
+};
+
+// Bulk update product pricing
+exports.bulkUpdatePricing = async (req, res, next) => {
+  try {
+    console.log('🔄 BULK UPDATE PRICING CALLED!');
+    console.log('🔍 Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 User:', req.user);
+
+    const { productIds, priceMarkupPercent } = req.body;
+
+    // Validation
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+      console.log('❌ Invalid productIds:', productIds);
+      return res.status(400).json({
+        success: false,
+        message: 'Product IDs array is required and must not be empty'
+      });
+    }
+
+    if (priceMarkupPercent === undefined || priceMarkupPercent === null) {
+      console.log('❌ Missing priceMarkupPercent:', priceMarkupPercent);
+      return res.status(400).json({
+        success: false,
+        message: 'Price markup percentage is required'
+      });
+    }
+
+    const markupValue = parseFloat(priceMarkupPercent);
+    if (isNaN(markupValue) || markupValue < 0 || markupValue > 1000) {
+      console.log('❌ Invalid priceMarkupPercent value:', priceMarkupPercent);
+      return res.status(400).json({
+        success: false,
+        message: 'Price markup percentage must be a number between 0 and 1000'
+      });
+    }
+
+    console.log('✅ Validation passed. Updating product pricing:', {
+      productIds,
+      priceMarkupPercent: markupValue,
+      count: productIds.length
+    });
+
+    // Get products to calculate new final prices
+    const products = await Product.find({ _id: { $in: productIds } });
+
+    if (products.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No products found with the provided IDs'
+      });
+    }
+
+    // Update each product individually to trigger price calculation
+    const updatePromises = products.map(async (product) => {
+      const newFinalPrice = product.basePrice + (product.basePrice * markupValue / 100);
+
+      return Product.findByIdAndUpdate(
+        product._id,
+        {
+          priceMarkupPercent: markupValue,
+          finalPrice: newFinalPrice,
+          updatedAt: new Date()
+        },
+        { new: true }
+      );
+    });
+
+    const updatedProducts = await Promise.all(updatePromises);
+
+    console.log('✅ Bulk pricing update successful:', {
+      requested: productIds.length,
+      updated: updatedProducts.length,
+      priceMarkupPercent: markupValue
+    });
+
+    res.json({
+      success: true,
+      message: `Price markup updated successfully for ${updatedProducts.length} product${updatedProducts.length > 1 ? 's' : ''}`,
+      updatedCount: updatedProducts.length,
+      products: updatedProducts
+    });
+  } catch (error) {
+    console.error('❌ Error bulk updating product pricing:', error);
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format in the provided list'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while bulk updating product pricing'
     });
   }
 };
