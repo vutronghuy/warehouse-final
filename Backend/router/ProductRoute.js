@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 const productController = require('../controller/ProductController');
 const { verifyToken, requireSuperAdmin } = require('../middlewares/auth');
@@ -18,10 +19,21 @@ const disableCache = (req, res, next) => {
   next();
 };
 
-// Configure multer for file uploads
+// Ensure upload directory exists and use absolute path (avoid multer saving errors)
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('✅ Upload directory created:', uploadDir);
+  } catch (err) {
+    console.error('❌ Failed to create upload directory:', err);
+  }
+}
+
+// Configure multer for file uploads (use absolute uploadDir)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname));
@@ -31,12 +43,18 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: function (req, file, cb) {
-    // Accept only Excel files
-    if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-        file.mimetype === 'application/vnd.ms-excel') {
+    // Accept only Excel files (check both mimetype and extension)
+    const allowedMimes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'
+    ];
+    const allowedExt = ['.xlsx', '.xls'];
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (allowedMimes.includes(file.mimetype) && allowedExt.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only Excel files are allowed!'), false);
+      cb(new Error('Only Excel files are allowed (.xlsx, .xls)!'), false);
     }
   },
   limits: {
@@ -77,7 +95,11 @@ const requireStaffOrAbove = (req, res, next) => {
   next();
 };
 
-// Routes for product management (with cache-busting)
+// ------------------
+// Routes for product management
+// NOTE: put more-specific GET routes BEFORE the parameterized GET '/:id' to avoid route collisions
+// ------------------
+
 // GET /api/products - Get all products with pagination and filters (Staff can access)
 router.get('/', disableCache, verifyToken, requireStaffOrAbove, productController.getAllProducts);
 
@@ -128,6 +150,21 @@ router.put('/min-stock', (req, res, next) => {
 // POST /api/products/test-objectid - Test ObjectId validation (Admin and Super Admin only) - MOVED UP
 router.post('/test-objectid', verifyToken, requireAdminOrSuperAdmin, productController.testObjectIdValidation);
 
+// ------------------
+// Import routes (Staff can import products)
+// Place BEFORE the parameterized '/:id' GET route to avoid conflicts like '/import' matching '/:id'
+// ------------------
+
+// GET /api/products/import/template - Download Excel template
+router.get('/import/template', verifyToken, requireStaffOrAbove, productController.generateTemplate);
+
+// POST /api/products/import - Import products from Excel (Staff can import)
+router.post('/import', verifyToken, requireStaffOrAbove, upload.single('file'), productController.importProducts);
+
+// ------------------
+// Parameterized and CRUD routes (keep after specific routes)
+// ------------------
+
 // GET /api/products/:id - Get product by ID
 router.get('/:id', disableCache, verifyToken, productController.getProductById);
 
@@ -139,12 +176,5 @@ router.put('/:id', verifyToken, requireAdminOrSuperAdmin, productController.upda
 
 // DELETE /api/products/:id - Delete product (Super Admin only)
 router.delete('/:id', verifyToken, requireSuperAdmin, productController.deleteProduct);
-
-// Import routes (Staff can import products)
-// GET /api/products/import/template - Download Excel template
-router.get('/import/template', verifyToken, requireStaffOrAbove, productController.generateTemplate);
-
-// POST /api/products/import - Import products from Excel (Staff can import)
-router.post('/import', verifyToken, requireStaffOrAbove, upload.single('file'), productController.importProducts);
 
 module.exports = router;

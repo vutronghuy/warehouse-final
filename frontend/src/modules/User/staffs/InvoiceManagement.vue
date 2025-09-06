@@ -154,6 +154,12 @@ const handleCreateSubmit = async (payload) => {
 
   isCreating.value = true;
   try {
+    // debug: log payload
+    console.log('Creating invoice payload:', {
+      exportReceiptId: selectedExport.value._id,
+      ...payload,
+    });
+
     const response = await axios.post('/api/invoices/from-export', {
       exportReceiptId: selectedExport.value._id,
       ...payload,
@@ -165,11 +171,21 @@ const handleCreateSubmit = async (payload) => {
       closeCreateModal();
       activeTab.value = 'my-invoices';
     } else {
+      // server trả { success: false, message: ... }
       showMessage(response.data?.message || 'Failed to create invoice', 'error');
     }
   } catch (error) {
-    console.error('Error creating invoice:', error);
-    const errMsg = error.response?.data?.message || error.message || 'Failed to create invoice';
+    // show full server response if có
+    console.error('Full axios error:', error);
+    console.error('Response data:', error.response?.data);
+    const errBody = error.response?.data;
+    // prioritize human-friendly messages
+    let errMsg = error.message || 'Failed to create invoice';
+    if (errBody) {
+      if (typeof errBody.message === 'string') errMsg = errBody.message;
+      else if (errBody.errors) errMsg = JSON.stringify(errBody.errors);
+      else errMsg = JSON.stringify(errBody);
+    }
     showMessage(errMsg, 'error');
   } finally {
     isCreating.value = false;

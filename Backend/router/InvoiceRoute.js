@@ -25,26 +25,6 @@ const requireAccounter = (req, res, next) => {
   next();
 };
 
-const requireManager = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Authentication required.' });
-  }
-  if (req.user.role !== 'manager') {
-    return res.status(403).json({ success: false, message: 'Access denied. Manager only.' });
-  }
-  next();
-};
-
-const requireAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Authentication required.' });
-  }
-  if (req.user.role !== 'admin' && !req.user.isSuperAdmin) {
-    return res.status(403).json({ success: false, message: 'Access denied. Admin only.' });
-  }
-  next();
-};
-
 // Middleware kiểm tra quyền truy cập
 const requireAccess = (req, res, next) => {
   if (!req.user) {
@@ -59,7 +39,6 @@ const requireAccess = (req, res, next) => {
   next();
 };
 
-router.get('/:id', verifyToken, requireAccess, invoiceController.getInvoiceById);
 const requireStaffOrAbove = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ success: false, message: 'Authentication required.' });
@@ -96,8 +75,12 @@ const disableCache = (req, res, next) => {
 
 // Routes for invoice management
 
+// GET /api/invoices/dashboard
+router.get('/dashboard', disableCache, verifyToken, requireStaffOrAbove, invoiceController.getDashboard);
 // GET /api/invoices - Get all invoices (filtered by user role)
+
 router.get('/', disableCache, verifyToken, requireStaffOrAbove, invoiceController.getInvoices);
+
 
 // GET /api/invoices/:id - Get single invoice
 router.get('/:id', verifyToken, requireStaffOrAbove, invoiceController.getInvoiceById);

@@ -120,7 +120,7 @@
 
 <script>
 import InvoiceReview from './InvoiceReview.vue';
-import AcceptedInvoices from './AcceptedInvoices.vue';
+import AcceptedInvoices from './AccounterDashboard.vue';
 import axios from 'axios';
 
 export default {

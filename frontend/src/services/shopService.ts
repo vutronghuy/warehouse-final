@@ -6,6 +6,11 @@ class ShopService {
       params,
     });
   }
+
+  async getAccountingDashboard(params?: any): Promise<IResponse> {
+    return await httpClient.get('api/reports/accounting', { params });
+  }
 }
+
 
 export const shopService = new ShopService();

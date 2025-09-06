@@ -31,8 +31,11 @@ router.get('/active', disableCache, verifyToken, requireStaffOrAbove, customerCo
 // GET /api/customers/stats - Get customer statistics
 router.get('/stats', disableCache, verifyToken, requireAdminOrSuperAdmin, customerController.getCustomerStats);
 
+// GET /api/customers/dashboard
+router.get('/dashboard', disableCache, verifyToken, requireStaffOrAbove, customerController.getCustomerDashboard);
 // GET /api/customers/:id - Get customer by ID
 router.get('/:id', disableCache, verifyToken, requireAdminOrSuperAdmin, customerController.getCustomerById);
+
 
 // POST /api/customers - Create new customer (Admin and Super Admin only)
 router.post('/', verifyToken, requireAdminOrSuperAdmin, customerController.createCustomer);

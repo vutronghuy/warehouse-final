@@ -11,7 +11,7 @@ export function getUserRole(): string | null {
   try {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return null;
-    
+
     // Decode JWT token để lấy role (simple decode, không verify)
     const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.role || null;
@@ -26,7 +26,7 @@ export function isSuperAdmin(): boolean {
   try {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return false;
-    
+
     const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.isSuperAdmin === true;
   } catch (error) {
@@ -61,7 +61,7 @@ export function requireSuperAdmin(
     next('/login');
     return;
   }
-  
+
   if (isSuperAdmin()) {
     next();
   } else {
@@ -78,7 +78,7 @@ export function requireSuperAdmin(
         next('/staff');
         break;
       case 'accounter':
-        next('/accouter');
+        next('/accounter');
         break;
       default:
         next('/login');
@@ -96,7 +96,7 @@ export function requireAdmin(
     next('/login');
     return;
   }
-  
+
   const role = getUserRole();
   if (role === 'admin' || isSuperAdmin()) {
     next();
@@ -110,7 +110,7 @@ export function requireAdmin(
         next('/staff');
         break;
       case 'accounter':
-        next('/accouter');
+        next('/accounter');
         break;
       default:
         next('/login');
@@ -129,7 +129,7 @@ export function requireRole(allowedRoles: string[]) {
       next('/login');
       return;
     }
-    
+
     const role = getUserRole();
     if (role && allowedRoles.includes(role)) {
       next();
@@ -146,7 +146,7 @@ export function requireRole(allowedRoles: string[]) {
           next('/staff');
           break;
         case 'accounter':
-          next('/accouter');
+          next('/accounter');
           break;
         default:
           next('/login');
@@ -175,7 +175,7 @@ export function redirectIfAuthenticated(
         next('/staff');
         break;
       case 'accounter':
-        next('/accouter');
+        next('/accounter');
         break;
       default:
         next('/');

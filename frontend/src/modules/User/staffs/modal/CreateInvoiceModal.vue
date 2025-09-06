@@ -6,7 +6,12 @@
           <h3 class="text-lg font-medium text-gray-900">Create Invoice</h3>
           <button @click="onClose" class="text-gray-400 hover:text-gray-600">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -16,15 +21,27 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
-              <input :value="selectedExport?.customerName" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" />
+              <input
+                :value="selectedExport?.customerName"
+                readonly
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+              />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Customer Phone</label>
-              <input :value="selectedExport?.customerPhone" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" />
+              <input
+                :value="selectedExport?.customerPhone"
+                readonly
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+              />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Customer Address</label>
-              <input :value="selectedExport?.customerAddress" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" />
+              <input
+                :value="selectedExport?.customerAddress"
+                readonly
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+              />
             </div>
           </div>
 
@@ -32,7 +49,11 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Payment Condition *</label>
-              <select v-model="localForm.paymentCondition" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select
+                v-model="localForm.paymentCondition"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
                 <option value="cash">Cash</option>
                 <option value="net15">Net 15 days</option>
                 <option value="net30">Net 30 days</option>
@@ -42,7 +63,11 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Currency *</label>
-              <select v-model="localForm.currency" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select
+                v-model="localForm.currency"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
                 <option value="VND">VND</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
@@ -50,7 +75,14 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">VAT Rate (%)</label>
-              <input v-model.number="localForm.vatRate" type="number" min="0" max="100" step="0.1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input
+                v-model.number="localForm.vatRate"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
           </div>
 
@@ -99,15 +131,21 @@
               <div class="w-64 space-y-2 text-sm">
                 <div class="flex justify-between">
                   <span>Subtotal:</span>
-                  <span class="font-medium">{{ formatCurrency(convertPrice(subtotalUSD)) }} {{ localForm.currency }}</span>
+                  <span class="font-medium"
+                    >{{ formatCurrency(convertPrice(subtotalUSD)) }} {{ localForm.currency }}</span
+                  >
                 </div>
                 <div class="flex justify-between">
                   <span>VAT ({{ localForm.vatRate }}%):</span>
-                  <span class="font-medium">{{ formatCurrency(convertPrice(vatAmountUSD)) }} {{ localForm.currency }}</span>
+                  <span class="font-medium"
+                    >{{ formatCurrency(convertPrice(vatAmountUSD)) }} {{ localForm.currency }}</span
+                  >
                 </div>
                 <div class="flex justify-between font-medium border-t pt-2">
                   <span>Total:</span>
-                  <span class="font-semibold">{{ formatCurrency(convertPrice(totalUSD)) }} {{ localForm.currency }}</span>
+                  <span class="font-semibold"
+                    >{{ formatCurrency(convertPrice(totalUSD)) }} {{ localForm.currency }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -116,13 +154,28 @@
           <!-- Note -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Note</label>
-            <textarea v-model="localForm.note" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Additional notes for the invoice..."></textarea>
+            <textarea
+              v-model="localForm.note"
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Additional notes for the invoice..."
+            ></textarea>
           </div>
 
           <!-- Actions -->
           <div class="flex justify-end space-x-3 pt-4">
-            <button type="button" @click="onClose" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-            <button type="submit" :disabled="isSubmitting" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            <button
+              type="button"
+              @click="onClose"
+              class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="isSubmitting"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
               {{ isSubmitting ? 'Creating...' : 'Create Invoice' }}
             </button>
           </div>
@@ -133,15 +186,15 @@
 </template>
 
 <script setup>
-import { reactive, watch, computed } from 'vue'
+import { reactive, watch, computed } from 'vue';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   selectedExport: { type: Object, default: null },
-  isSubmitting: { type: Boolean, default: false }
-})
+  isSubmitting: { type: Boolean, default: false },
+});
 
-const emit = defineEmits(['submit', 'close', 'error'])
+const emit = defineEmits(['submit', 'close', 'error']);
 
 // Exchange rates (USD as base currency)
 const exchangeRates = {
@@ -163,7 +216,9 @@ const localForm = reactive(defaultForm());
 const subtotalUSD = computed(() => {
   if (!props.selectedExport?.details) return 0;
   return props.selectedExport.details.reduce((sum, detail) => {
-    return sum + getProductPrice(detail) * detail.quantity;
+    const price = getProductPrice(detail);
+    const quantity = detail.quantity || 0;
+    return sum + (price * quantity);
   }, 0);
 });
 
@@ -181,8 +236,26 @@ function getProductName(detail) {
 }
 
 function getProductPrice(detail) {
-  // Assuming prices are stored in USD (finalPrice)
-  return detail.productId?.finalPrice || detail.unitPrice || 0;
+  // Check if price is in the detail object directly
+  if (detail.unitPrice) {
+    return detail.unitPrice;
+  }
+
+  // Check if price is in the product object
+  if (detail.productId) {
+    if (typeof detail.productId === 'object') {
+      // If productId is populated, try to get price from it
+      return detail.productId.finalPrice ?? detail.productId.basePrice ?? detail.productId.price ?? 0;
+    } else {
+      // If productId is just an ID, try to find product in products list
+      const product = props.selectedExport?.details?.find((d) => d.productId === detail.productId)?.productId;
+      if (product) {
+        return product.finalPrice ?? product.basePrice ?? product.price ?? 0;
+      }
+    }
+  }
+
+  return 0;
 }
 
 function convertPrice(usdAmount) {

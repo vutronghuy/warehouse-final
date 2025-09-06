@@ -5,7 +5,7 @@
         <h3 class="text-lg font-medium text-gray-900">Create Export Receipt</h3>
         <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
@@ -147,14 +147,23 @@
         <!-- Selected Products -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Selected Products</label>
-          <div v-if="form.details.length === 0" class="text-gray-500 text-center py-8 border-2 border-dashed border-gray-300 rounded">
+          <div
+            v-if="form.details.length === 0"
+            class="text-gray-500 text-center py-8 border-2 border-dashed border-gray-300 rounded"
+          >
             No products selected. Use the search above to add products.
           </div>
           <div v-else class="space-y-3">
-            <div v-for="(line, idx) in form.details" :key="line.productId" class="flex items-center space-x-3 p-3 border rounded bg-white">
+            <div
+              v-for="(line, idx) in form.details"
+              :key="line.productId"
+              class="flex items-center space-x-3 p-3 border rounded bg-white"
+            >
               <div class="flex-1">
                 <div class="font-medium">{{ getProductName(line.productId) }}</div>
-                <div class="text-sm text-gray-500">SKU: {{ getProductSku(line.productId) }} | Stock: {{ getProductStock(line.productId) }}</div>
+                <div class="text-sm text-gray-500">
+                  SKU: {{ getProductSku(line.productId) }} | Stock: {{ getProductStock(line.productId) }}
+                </div>
               </div>
 
               <div class="w-28">
@@ -173,9 +182,19 @@
                 <div>${{ calculateProductPrice(line.productId) }}</div>
               </div>
 
-              <button @click="removeLine(idx)" class="text-red-600 hover:text-red-800" type="button" title="Remove">
+              <button
+                @click="removeLine(idx)"
+                class="text-red-600 hover:text-red-800"
+                type="button"
+                title="Remove"
+              >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6"/>
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6"
+                  />
                 </svg>
               </button>
             </div>
@@ -185,7 +204,12 @@
         <!-- notes -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-          <textarea v-model="form.notes" rows="3" class="w-full px-3 py-2 border rounded" placeholder="Optional notes..."></textarea>
+          <textarea
+            v-model="form.notes"
+            rows="3"
+            class="w-full px-3 py-2 border rounded"
+            placeholder="Optional notes..."
+          ></textarea>
         </div>
 
         <!-- total -->
@@ -197,7 +221,12 @@
         <!-- actions -->
         <div class="flex justify-end space-x-3">
           <button @click="$emit('close')" type="button" class="px-4 py-2 border rounded">Cancel</button>
-          <button @click="onSubmit" :disabled="isSubmitting" type="button" class="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">
+          <button
+            @click="onSubmit"
+            :disabled="isSubmitting"
+            type="button"
+            class="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+          >
             {{ isSubmitting ? 'Creating...' : 'Create Export Receipt' }}
           </button>
         </div>
@@ -224,41 +253,41 @@ export default {
         customerPhone: '',
         customerAddress: '',
         details: [], // Bắt đầu với mảng rỗng
-        notes: ''
+        notes: '',
       },
       productSearch: '',
       categoryFilter: '',
       selectedProductToAdd: '',
       selectedCustomerId: '',
       selectedCustomer: null,
-      showNewCustomerForm: false
+      showNewCustomerForm: false,
     };
   },
   computed: {
     // Lọc sản phẩm có thể chọn (loại bỏ out of stock và đã chọn)
     filteredAvailableProducts() {
-      let filtered = this.availableProducts.filter(p => {
+      let filtered = this.availableProducts.filter((p) => {
         // Loại bỏ sản phẩm out of stock
         if (p.status === 'out of stock') return false;
         // Loại bỏ sản phẩm đã được chọn
-        if (this.form.details.some(detail => detail.productId === p._id)) return false;
+        if (this.form.details.some((detail) => detail.productId === p._id)) return false;
         return true;
       });
 
       // Lọc theo search
       if (this.productSearch.trim()) {
         const searchTerm = this.productSearch.toLowerCase();
-        filtered = filtered.filter(p =>
-          p.name.toLowerCase().includes(searchTerm) ||
-          p.sku.toLowerCase().includes(searchTerm)
+        filtered = filtered.filter(
+          (p) => p.name.toLowerCase().includes(searchTerm) || p.sku.toLowerCase().includes(searchTerm),
         );
       }
 
       // Lọc theo category
       if (this.categoryFilter) {
-        filtered = filtered.filter(p =>
-          p.categoryId === this.categoryFilter ||
-          (p.categoryId && p.categoryId._id === this.categoryFilter)
+        filtered = filtered.filter(
+          (p) =>
+            p.categoryId === this.categoryFilter ||
+            (p.categoryId && p.categoryId._id === this.categoryFilter),
         );
       }
 
@@ -275,7 +304,7 @@ export default {
       const categories = [];
       const categoryIds = new Set();
 
-      this.availableProducts.forEach(p => {
+      this.availableProducts.forEach((p) => {
         if (p.categoryId) {
           const category = typeof p.categoryId === 'object' ? p.categoryId : null;
           if (category && !categoryIds.has(category._id)) {
@@ -289,13 +318,26 @@ export default {
     },
 
     totalAmount() {
-      return this.form.details.reduce((sum, d) => {
-        const prod = this.availableProducts.find(p => p._id === d.productId);
-        const price = prod ? (prod.finalPrice ?? prod.price ?? 0) : 0;
-        const q = Number(d.quantity) || 0;
-        return sum + (price * q);
-      }, 0).toFixed(2);
-    }
+      // Tính tổng các sản phẩm
+      const total = this.form.details.reduce((sum, d) => {
+        // Tìm thông tin sản phẩm
+        const prod = this.availableProducts.find((p) => p._id === d.productId);
+
+        // Lấy giá (ưu tiên finalPrice, fallback về price hoặc 0)
+        const price = prod ? (prod.finalPrice ?? prod.basePrice ?? prod.price ?? 0) : 0;
+
+        // Đảm bảo số lượng là số dương
+        const quantity = Math.max(0, Number(d.quantity) || 0);
+
+        // Tính tổng cho sản phẩm này
+        const lineTotal = price * quantity;
+
+        return sum + lineTotal;
+      }, 0);
+
+      // Format với 2 số thập phân
+      return Number(total).toFixed(2);
+    },
   },
   methods: {
     // Thêm sản phẩm được chọn vào danh sách
@@ -303,7 +345,9 @@ export default {
       if (!this.selectedProductToAdd) return;
 
       // Kiểm tra xem sản phẩm đã có trong danh sách chưa
-      const existingIndex = this.form.details.findIndex(detail => detail.productId === this.selectedProductToAdd);
+      const existingIndex = this.form.details.findIndex(
+        (detail) => detail.productId === this.selectedProductToAdd,
+      );
 
       if (existingIndex !== -1) {
         // Nếu đã có, tăng số lượng lên 1
@@ -312,7 +356,7 @@ export default {
         // Nếu chưa có, thêm mới với số lượng 1
         this.form.details.push({
           productId: this.selectedProductToAdd,
-          quantity: 1
+          quantity: 1,
         });
       }
 
@@ -326,24 +370,24 @@ export default {
 
     // Helper methods để hiển thị thông tin sản phẩm
     getProductName(productId) {
-      const product = this.availableProducts.find(p => p._id === productId);
+      const product = this.availableProducts.find((p) => p._id === productId);
       return product ? product.name : 'Unknown Product';
     },
 
     getProductSku(productId) {
-      const product = this.availableProducts.find(p => p._id === productId);
+      const product = this.availableProducts.find((p) => p._id === productId);
       return product ? product.sku : 'N/A';
     },
 
     getProductStock(productId) {
-      const product = this.availableProducts.find(p => p._id === productId);
+      const product = this.availableProducts.find((p) => p._id === productId);
       return product ? product.quantity : 0;
     },
 
     // Customer handling methods
     onCustomerChange() {
       if (this.selectedCustomerId) {
-        this.selectedCustomer = this.availableCustomers.find(c => c._id === this.selectedCustomerId);
+        this.selectedCustomer = this.availableCustomers.find((c) => c._id === this.selectedCustomerId);
         if (this.selectedCustomer) {
           // Auto-fill customer info
           this.form.customerName = this.selectedCustomer.name;
@@ -373,13 +417,13 @@ export default {
       this.form.customerAddress = '';
     },
     getMaxQuantity(productId) {
-      const p = this.availableProducts.find(x => x._id === productId);
+      const p = this.availableProducts.find((x) => x._id === productId);
       return p ? p.quantity : 0;
     },
     calculateProductPrice(productId) {
       if (this.getProductPrice) return this.getProductPrice(productId);
-      const p = this.availableProducts.find(x => x._id === productId);
-      return p ? (Number(p.finalPrice ?? p.basePrice ?? p.price ?? 0).toFixed(2)) : '0.00';
+      const p = this.availableProducts.find((x) => x._id === productId);
+      return p ? Number(p.finalPrice ?? p.basePrice ?? p.price ?? 0).toFixed(2) : '0.00';
     },
     validate() {
       if (!this.form.customerName.trim()) {
@@ -394,14 +438,14 @@ export default {
         this.$emit('error', 'Customer address is required');
         return false;
       }
-      const validDetails = this.form.details.filter(d => d.productId && d.quantity > 0);
+      const validDetails = this.form.details.filter((d) => d.productId && d.quantity > 0);
       if (!validDetails.length) {
         this.$emit('error', 'Add at least one product with quantity > 0');
         return false;
       }
       // validate stock
-      const invalid = validDetails.some(d => {
-        const p = this.availableProducts.find(x => x._id === d.productId);
+      const invalid = validDetails.some((d) => {
+        const p = this.availableProducts.find((x) => x._id === d.productId);
         return !p || Number(d.quantity) > Number(p.quantity);
       });
       if (invalid) {
@@ -418,10 +462,10 @@ export default {
         customerPhone: this.form.customerPhone,
         customerAddress: this.form.customerAddress,
         notes: this.form.notes,
-        details: this.form.details.map(d => ({ productId: d.productId, quantity: Number(d.quantity) }))
+        details: this.form.details.map((d) => ({ productId: d.productId, quantity: Number(d.quantity) })),
       };
       this.$emit('submit', payload);
-    }
+    },
   },
   watch: {
     visible(val) {
@@ -432,7 +476,7 @@ export default {
           customerPhone: '',
           customerAddress: '',
           details: [], // Reset về mảng rỗng
-          notes: ''
+          notes: '',
         };
         this.productSearch = '';
         this.categoryFilter = '';
@@ -441,7 +485,7 @@ export default {
         this.selectedCustomer = null;
         this.showNewCustomerForm = false;
       }
-    }
-  }
+    },
+  },
 };
 </script>

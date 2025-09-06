@@ -1,5 +1,25 @@
 <template>
   <div class="min-h-screen bg-gray-50 p-6">
+    <!-- Success banner -->
+    <div v-if="showSuccess" class="mb-6">
+      <div class="flex items-start justify-between bg-green-50 border border-green-200 text-green-900 rounded-lg p-4">
+        <div class="flex items-center">
+          <svg class="h-6 w-6 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+          </svg>
+          <div class="text-sm">
+            <p class="font-medium">{{ successMessage }}</p>
+            <p v-if="importResults" class="text-xs text-green-800 mt-1">
+              Imported: {{ importResults.successful || 0 }}
+              <span v-if="importResults.updated"> • Updated: {{ importResults.updated }}</span>
+              • Failed: {{ importResults.failed || 0 }}
+            </p>
+          </div>
+        </div>
+        <button @click="hideSuccess" class="text-green-700 hover:text-green-900 text-sm font-medium ml-4">Close</button>
+      </div>
+    </div>
+
     <!-- Header -->
     <div class="mb-8">
       <div class="flex items-center justify-between">
@@ -12,7 +32,12 @@
           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
           </svg>
           Download Template
         </button>
@@ -27,27 +52,24 @@
       <div
         @drop="handleDrop"
         @dragover.prevent
-        @dragenter.prevent
+        @dragenter.prevent="isDragging = true"
+        @dragleave.prevent="isDragging = false"
         class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors"
         :class="{ 'border-blue-400 bg-blue-50': isDragging }"
       >
-        <input
-          ref="fileInput"
-          type="file"
-          accept=".xlsx,.xls"
-          @change="handleFileSelect"
-          class="hidden"
-        />
+        <input ref="fileInput" type="file" accept=".xlsx,.xls" @change="handleFileSelect" class="hidden" />
 
         <div v-if="!selectedFile">
           <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path
+              d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
           <div class="mt-4">
-            <button
-              @click="$refs.fileInput.click()"
-              class="text-blue-600 hover:text-blue-500 font-medium"
-            >
+            <button @click="$refs.fileInput.click()" class="text-blue-600 hover:text-blue-500 font-medium">
               Click to upload
             </button>
             <span class="text-gray-500"> or drag and drop</span>
@@ -57,18 +79,18 @@
 
         <div v-else class="text-center">
           <svg class="mx-auto h-12 w-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div class="mt-2">
             <p class="text-sm font-medium text-gray-900">{{ selectedFile.name }}</p>
             <p class="text-xs text-gray-500">{{ formatFileSize(selectedFile.size) }}</p>
           </div>
-          <button
-            @click="removeFile"
-            class="mt-2 text-red-600 hover:text-red-500 text-sm"
-          >
-            Remove file
-          </button>
+          <button @click="removeFile" class="mt-2 text-red-600 hover:text-red-500 text-sm">Remove file</button>
         </div>
       </div>
 
@@ -79,9 +101,19 @@
           :disabled="!selectedFile || isUploading"
           class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
-          <svg v-if="isUploading" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg
+            v-if="isUploading"
+            class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
           </svg>
           {{ isUploading ? 'Uploading...' : 'Upload & Import' }}
         </button>
@@ -160,7 +192,10 @@
           <li><strong>primarySupplier</strong> - Supplier name (must exist in system)</li>
           <li><strong>minStockLevel</strong> - Minimum stock level (number, optional)</li>
         </ul>
-        <p class="mt-3"><strong>Note:</strong> Import date, status, and warehouse will be set automatically. Products will be assigned to your warehouse.</p>
+        <p class="mt-3">
+          <strong>Note:</strong> Import date, status, and warehouse will be set automatically. Products will
+          be assigned to your warehouse.
+        </p>
       </div>
     </div>
   </div>
@@ -176,7 +211,10 @@ export default {
       selectedFile: null,
       isDragging: false,
       isUploading: false,
-      importResults: null
+      importResults: null,
+      showSuccess: false,
+      successMessage: '',
+      autoHideTimer: null
     };
   },
   methods: {
@@ -191,8 +229,11 @@ export default {
 
     handleFileSelect(e) {
       const file = e.target.files[0];
-      if (file && (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-                   file.type === 'application/vnd.ms-excel')) {
+      if (
+        file &&
+        (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+          file.type === 'application/vnd.ms-excel')
+      ) {
         this.selectedFile = file;
         this.importResults = null;
       } else {
@@ -219,7 +260,7 @@ export default {
         const response = await axios.get('/api/products/import/template', {
           responseType: 'blob',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+            Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
           }
         });
 
@@ -237,6 +278,31 @@ export default {
       }
     },
 
+    showSuccessBanner(message) {
+      this.successMessage = message;
+      this.showSuccess = true;
+
+      // clear previous timer if exists
+      if (this.autoHideTimer) {
+        clearTimeout(this.autoHideTimer);
+        this.autoHideTimer = null;
+      }
+
+      // auto hide after 5s
+      this.autoHideTimer = setTimeout(() => {
+        this.showSuccess = false;
+        this.autoHideTimer = null;
+      }, 5000);
+    },
+
+    hideSuccess() {
+      this.showSuccess = false;
+      if (this.autoHideTimer) {
+        clearTimeout(this.autoHideTimer);
+        this.autoHideTimer = null;
+      }
+    },
+
     async uploadFile() {
       if (!this.selectedFile) return;
 
@@ -249,18 +315,46 @@ export default {
         const response = await axios.post('/api/products/import', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${token}`
+            Authorization: `Bearer ${token}`
           }
         });
 
         this.importResults = response.data;
 
-        if (response.data.successful > 0) {
+        // Show success banner when there are successful imports or updates
+        const successCount = response.data.successful || 0;
+        const updatedCount = response.data.updated || 0;
+        if (successCount > 0 || updatedCount > 0) {
+          const msgParts = [];
+          if (successCount > 0) msgParts.push(`${successCount} imported`);
+          if (updatedCount > 0) msgParts.push(`${updatedCount} updated`);
+          msgParts.push('successfully');
+          this.showSuccessBanner(msgParts.join(', '));
           this.$emit('imported'); // Emit event to refresh product list
         }
+
       } catch (error) {
         console.error('Error uploading file:', error);
-        alert('Failed to import products. Please check your file and try again.');
+        // show server response if available
+        if (error.response && error.response.data) {
+          console.error('Server response:', error.response.data);
+          const srv = error.response.data;
+          // nếu server trả errors array
+          if (srv.errors && srv.errors.length) {
+            this.importResults = {
+              total: srv.total || 0,
+              successful: srv.successful || 0,
+              failed: srv.failed || srv.errors.length,
+              errors: srv.errors
+            };
+          } else if (srv.message) {
+            alert(`Failed to import: ${srv.message}`);
+          } else {
+            alert(`Failed to import: ${JSON.stringify(srv)}`);
+          }
+        } else {
+          alert('Failed to import products. Network error or server did not respond.');
+        }
       } finally {
         this.isUploading = false;
       }

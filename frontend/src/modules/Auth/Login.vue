@@ -324,7 +324,7 @@ const handleSubmit = async () => {
     } else if (roleKey === 'staff') {
       routeTo = '/staff';
     } else if (roleKey === 'accounter') {
-      routeTo = '/accouter';
+      routeTo = '/accounter';
     }
     // If no matching role, routeTo remains '/' (default)
 

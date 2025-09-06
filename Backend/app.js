@@ -16,10 +16,13 @@ const warehouseRoute = require('./router/WarehouseRouteNew');
 // const warehouseRoute = require('./router/warehouseRoute');
 const userRoute = require('./router/UserRoute');
 const authRoute = require('./router/authRoute');
+const customerRoute = require('./router/CustomerRoute');
 const exportRoute = require('./router/ExportRoute');
 const importRoute = require('./router/ImportRoute');
 const exportReceiptRoute = require('./router/ExportReceiptRoute');
 const invoiceRoute = require('./router/InvoiceRoute');
+const targetRoute = require('./router/TargetRoute');
+const reportsRoute = require('./router/reports');
 //connect to mongodb
 const dbURI = process.env.DB_URI;
 mongoose.connect(dbURI, {
@@ -53,10 +56,10 @@ app.use((req, res, next) => {
 //router
 app.use('/api/suppliers', supplierRoute)
 app.use('/api/categories', categoryRoute)
-app.use('/api/customers', require('./router/CustomerRoute'))
+app.use('/api/customers', customerRoute)
 app.use('/api/products', productRoute)
 app.use('/api/warehouses', warehouseRoute)
-
+app.use('/api/reports', reportsRoute)
 // Debug middleware for /api/users
 app.use('/api/users', (req, res, next) => {
   console.log(`🔍 API Users route hit: ${req.method} ${req.path}`);
@@ -70,6 +73,7 @@ app.use('/api/export-receipts', exportReceiptRoute)
 app.use('/api/invoices', invoiceRoute)
 app.use('/export', exportRoute)
 app.use('/import', importRoute)
+app.use('/api/targets', targetRoute)
 app.get('/', (req, res) => {
   res.send('Backend Node.js is running!');
 });

@@ -2,7 +2,7 @@ import axios, { AxiosError, AxiosResponse, AxiosInstance, InternalAxiosRequestCo
 import { message } from 'ant-design-vue';
 
 import { IResponse } from '../interfaces';
-import { authService } from '@/services';
+
 import { isNotifyWhenFail, jsonDecode } from '@/helpers';
 import { getAppAccessToken, removeAppToken, setAppToken } from '@/core/auth';
 
@@ -188,6 +188,7 @@ export class BaseClient {
         this.isRefreshing = true;
 
         // Call request refresh token
+        const { authService } = await import('@/services');
         const res = await authService.refreshToken().finally(() => (this.isRefreshing = false));
 
         if (res.error) {
