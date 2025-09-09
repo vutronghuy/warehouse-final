@@ -5,7 +5,7 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 
 // Create invoice from export receipt (Staff only)
-exports.createInvoiceFromExport = async (req, res, next) => {
+const createInvoiceFromExport = async (req, res, next) => {
   try {
     console.log("🚀 CREATE INVOICE FROM EXPORT CALLED!");
     console.log("🔍 Request body:", JSON.stringify(req.body, null, 2));
@@ -256,7 +256,7 @@ exports.createInvoiceFromExport = async (req, res, next) => {
 };
 
 // Get invoices (filtered by user role and warehouse)
-exports.getInvoices = async (req, res, next) => {
+const getAllInvoices = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status, search } = req.query;
 
@@ -333,7 +333,7 @@ exports.getInvoices = async (req, res, next) => {
   }
 };
 
-exports.getDashboard = async (req, res, next) => {
+const dashboard = async (req, res, next) => {
   try {
     const { period = 'month', year, month, day } = req.query;
 
@@ -432,7 +432,7 @@ exports.getDashboard = async (req, res, next) => {
 };
 
 // Get single invoice by ID
-exports.getInvoiceById = async (req, res, next) => {
+const getInvoiceById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -509,7 +509,7 @@ exports.getInvoiceById = async (req, res, next) => {
   }
 };
 // Accounter review invoice
-exports.reviewInvoice = async (req, res, next) => {
+const reviewInvoice = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { action, comment } = req.body; // action: 'approve' or 'reject'
@@ -601,7 +601,7 @@ exports.reviewInvoice = async (req, res, next) => {
 };
 
 // Update invoice (Staff only, before review)
-exports.updateInvoice = async (req, res, next) => {
+const updateInvoice = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { paymentCondition, currency, note, vatRate } = req.body;
@@ -730,7 +730,7 @@ exports.updateInvoice = async (req, res, next) => {
 };
 
 // Delete invoice (Staff only, before review)
-exports.deleteInvoice = async (req, res, next) => {
+const deleteInvoice = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -788,4 +788,51 @@ exports.deleteInvoice = async (req, res, next) => {
     console.error("❌ Error deleting invoice:", error);
     next(error);
   }
+};
+
+// Get total revenue from all invoices
+const getTotalRevenue = async (req, res, next) => {
+  try {
+    // Lấy tổng doanh thu từ tất cả invoice có status = 'approved'
+    const result = await Invoice.aggregate([
+      {
+        $match: {
+          status: 'approved',
+          deletedAt: null
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$finalAmount' },
+          totalInvoices: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const totalRevenue = result.length > 0 ? result[0].totalRevenue : 0;
+    const totalInvoices = result.length > 0 ? result[0].totalInvoices : 0;
+
+    res.json({
+      success: true,
+      totalRevenue,
+      totalInvoices,
+      message: 'Total revenue calculated successfully'
+    });
+
+  } catch (error) {
+    console.error('Get total revenue error:', error);
+    next(error);
+  }
+};
+
+module.exports = {
+  createInvoiceFromExport,
+  getAllInvoices,
+  getInvoiceById,
+  reviewInvoice,
+  updateInvoice,
+  deleteInvoice,
+  dashboard,
+  getTotalRevenue
 };

@@ -506,7 +506,7 @@ exports.getActiveProducts = async (req, res, next) => {
     const products = await Product.find({
       status: 'in stock'
     })
-      .select('_id name sku unit basePrice')
+      .select('_id name sku unit basePrice quantity minStockLevel')
       .sort({ name: 1 })
       .lean();
 

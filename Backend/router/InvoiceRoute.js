@@ -76,10 +76,13 @@ const disableCache = (req, res, next) => {
 // Routes for invoice management
 
 // GET /api/invoices/dashboard
-router.get('/dashboard', disableCache, verifyToken, requireStaffOrAbove, invoiceController.getDashboard);
+router.get('/dashboard', disableCache, verifyToken, requireStaffOrAbove, invoiceController.dashboard);
+
+// GET /api/invoices/total-revenue - Get total revenue from all invoices
+router.get('/total-revenue', disableCache, verifyToken, requireStaffOrAbove, invoiceController.getTotalRevenue);
 // GET /api/invoices - Get all invoices (filtered by user role)
 
-router.get('/', disableCache, verifyToken, requireStaffOrAbove, invoiceController.getInvoices);
+router.get('/', disableCache, verifyToken, requireStaffOrAbove, invoiceController.getAllInvoices);
 
 
 // GET /api/invoices/:id - Get single invoice

@@ -96,7 +96,7 @@
               'whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm',
             ]"
           >
-            Accepted Invoices
+            Accounter Dashboard
           </button>
         </nav>
       </div>
@@ -120,7 +120,7 @@
 
 <script>
 import InvoiceReview from './InvoiceReview.vue';
-import AcceptedInvoices from './AccounterDashboard.vue';
+import AcceptedInvoices from './AccounterDashboardSimple.vue';
 import axios from 'axios';
 
 export default {
