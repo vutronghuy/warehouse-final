@@ -2,6 +2,7 @@ const ExportReceipt = require('../models/export/ExportReceipt');
 const Product = require('../models/products/product');
 const User = require('../models/User');
 const mongoose = require('mongoose');
+const socketService = require('../services/socketService');
 
 // Generate receipt number
 const generateReceiptNumber = async () => {
@@ -124,12 +125,38 @@ exports.createExportReceipt = async (req, res, next) => {
 
     await exportReceipt.save();
 
+    // Reserve product quantities immediately when export receipt is created
+    console.log('🔒 Reserving product quantities for export receipt:', receiptNumber);
+    for (const detail of validatedDetails) {
+      const result = await Product.findByIdAndUpdate(
+        detail.productId,
+        {
+          $inc: { quantity: -detail.quantity },
+          updatedBy: req.user.sub,
+          updatedAt: new Date()
+        },
+        { new: true }
+      );
+
+      console.log(`✅ Reserved ${detail.quantity} units of product ${result?.name || detail.productId}`);
+      console.log(`📦 New stock level: ${result?.quantity || 'unknown'}`);
+    }
+
     // Populate for response
     await exportReceipt.populate([
       { path: 'warehouseId', select: 'name location' },
       { path: 'createdByStaff', select: 'staff.fullName' },
       { path: 'details.productId', select: 'name sku basePrice finalPrice priceMarkupPercent' }
     ]);
+
+    // Emit Socket.IO notification
+    socketService.notifyExportCreated(exportReceipt);
+
+    // Notify chart data update
+    socketService.notifyChartDataUpdated('all', {
+      exportReceiptId: exportReceipt._id,
+      action: 'created'
+    });
 
     res.status(201).json({
       success: true,
@@ -496,20 +523,35 @@ exports.adminApproveReceipt = async (req, res, next) => {
 
     if (action === 'approve') {
       exportReceipt.status = 'approved';
+      console.log(`✅ Export receipt ${exportReceipt.receiptNumber} approved - quantities already reserved`);
+      
+      // Emit Socket.IO notification for approved export
+      socketService.notifyExportApproved(exportReceipt);
 
-      // Update product quantities when approved
-      for (const detail of exportReceipt.details) {
-        await Product.findByIdAndUpdate(
-          detail.productId,
-          {
-            $inc: { quantity: -detail.quantity },
-            updatedBy: req.user.sub,
-            updatedAt: new Date()
-          }
-        );
-      }
+      // Notify chart data update
+      socketService.notifyChartDataUpdated('all', {
+        exportReceiptId: exportReceipt._id,
+        action: 'approved'
+      });
     } else {
       exportReceipt.status = 'rejected';
+
+      // Restore product quantities when rejected
+      console.log('🔄 Restoring product quantities for rejected export receipt:', exportReceipt.receiptNumber);
+      for (const detail of exportReceipt.details) {
+        const result = await Product.findByIdAndUpdate(
+          detail.productId,
+          {
+            $inc: { quantity: detail.quantity }, // Add back the quantity
+            updatedBy: req.user.sub,
+            updatedAt: new Date()
+          },
+          { new: true }
+        );
+
+        console.log(`🔄 Restored ${detail.quantity} units of product ${result?.name || detail.productId}`);
+        console.log(`📦 New stock level: ${result?.quantity || 'unknown'}`);
+      }
     }
 
     exportReceipt.updatedBy = req.user.sub;
@@ -526,7 +568,7 @@ exports.adminApproveReceipt = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: `Export receipt ${action}d successfully. ${action === 'approve' ? 'Product quantities updated.' : ''}`,
+      message: `Export receipt ${action}d successfully. ${action === 'approve' ? 'Quantities were already reserved.' : 'Product quantities restored.'}`,
       exportReceipt
     });
   } catch (error) {
@@ -570,6 +612,9 @@ exports.updateExportReceipt = async (req, res, next) => {
       let totalAmount = 0;
       const validatedDetails = [];
 
+      // Store old details for quantity restoration
+      const oldDetails = [...exportReceipt.details];
+
       for (const detail of details) {
         const { productId, quantity } = detail;
 
@@ -592,10 +637,14 @@ exports.updateExportReceipt = async (req, res, next) => {
           });
         }
 
-        if (product.quantity < quantity) {
+        // For stock checking, we need to consider the current reserved quantity
+        const oldReservedQty = oldDetails.find(d => d.productId.toString() === productId.toString())?.quantity || 0;
+        const availableStock = product.quantity + oldReservedQty; // Add back old reserved quantity
+
+        if (availableStock < quantity) {
           return res.status(400).json({
             success: false,
-            message: `Insufficient stock for ${product.name}. Available: ${product.quantity}, Requested: ${quantity}`
+            message: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${quantity}`
           });
         }
 
@@ -605,6 +654,38 @@ exports.updateExportReceipt = async (req, res, next) => {
         });
 
         totalAmount += (product.finalPrice || product.basePrice) * quantity;
+      }
+
+      // Restore quantities from old details (only if status is 'created' - quantities were reserved)
+      if (exportReceipt.status === 'created') {
+        console.log('🔄 Restoring old reserved quantities for update:', exportReceipt.receiptNumber);
+        for (const oldDetail of oldDetails) {
+          await Product.findByIdAndUpdate(
+            oldDetail.productId,
+            {
+              $inc: { quantity: oldDetail.quantity }, // Add back old quantity
+              updatedBy: req.user.sub,
+              updatedAt: new Date()
+            }
+          );
+          console.log(`🔄 Restored ${oldDetail.quantity} units for update`);
+        }
+      }
+
+      // Reserve new quantities
+      console.log('🔒 Reserving new quantities for update:', exportReceipt.receiptNumber);
+      for (const newDetail of validatedDetails) {
+        const result = await Product.findByIdAndUpdate(
+          newDetail.productId,
+          {
+            $inc: { quantity: -newDetail.quantity }, // Reserve new quantity
+            updatedBy: req.user.sub,
+            updatedAt: new Date()
+          },
+          { new: true }
+        );
+        console.log(`✅ Reserved ${newDetail.quantity} units for update`);
+        console.log(`📦 New stock level: ${result?.quantity || 'unknown'}`);
       }
 
       exportReceipt.details = validatedDetails;
@@ -623,6 +704,24 @@ exports.updateExportReceipt = async (req, res, next) => {
       // Clear previous manager review when resubmitting
       exportReceipt.managerReview = undefined;
       console.log('🔄 Receipt resubmitted - status reset to "created"');
+
+      // Note: If details were not updated above, we need to reserve quantities for rejected receipt
+      if (!details || !Array.isArray(details)) {
+        console.log('🔒 Re-reserving quantities for resubmitted receipt:', exportReceipt.receiptNumber);
+        for (const detail of exportReceipt.details) {
+          const result = await Product.findByIdAndUpdate(
+            detail.productId,
+            {
+              $inc: { quantity: -detail.quantity }, // Reserve quantity again
+              updatedBy: req.user.sub,
+              updatedAt: new Date()
+            },
+            { new: true }
+          );
+          console.log(`✅ Re-reserved ${detail.quantity} units for resubmission`);
+          console.log(`📦 New stock level: ${result?.quantity || 'unknown'}`);
+        }
+      }
     }
 
     exportReceipt.updatedBy = req.user.sub;
@@ -643,6 +742,71 @@ exports.updateExportReceipt = async (req, res, next) => {
     });
   } catch (error) {
     console.error('❌ Error updating export receipt:', error);
+    next(error);
+  }
+};
+
+// Delete export receipt (Staff can delete only if status is 'created' or 'rejected')
+exports.deleteExportReceipt = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const exportReceipt = await ExportReceipt.findById(id);
+    if (!exportReceipt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Export receipt not found'
+      });
+    }
+
+    // Check if receipt can be deleted
+    if (!['created', 'rejected'].includes(exportReceipt.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Can only delete receipts in "created" or "rejected" status'
+      });
+    }
+
+    // Check if user is the creator
+    if (exportReceipt.createdByStaff.toString() !== req.user.sub) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete your own export receipts'
+      });
+    }
+
+    // Restore product quantities if receipt was in 'created' status (quantities were reserved)
+    if (exportReceipt.status === 'created') {
+      console.log('🔄 Restoring quantities for deleted export receipt:', exportReceipt.receiptNumber);
+      for (const detail of exportReceipt.details) {
+        const result = await Product.findByIdAndUpdate(
+          detail.productId,
+          {
+            $inc: { quantity: detail.quantity }, // Add back the quantity
+            updatedBy: req.user.sub,
+            updatedAt: new Date()
+          },
+          { new: true }
+        );
+
+        console.log(`🔄 Restored ${detail.quantity} units of product ${result?.name || detail.productId}`);
+        console.log(`📦 New stock level: ${result?.quantity || 'unknown'}`);
+      }
+    }
+
+    // Soft delete the receipt
+    exportReceipt.deletedAt = new Date();
+    exportReceipt.updatedBy = req.user.sub;
+    exportReceipt.updatedAt = new Date();
+    await exportReceipt.save();
+
+    res.json({
+      success: true,
+      message: 'Export receipt deleted successfully. Product quantities restored.',
+      receiptNumber: exportReceipt.receiptNumber
+    });
+  } catch (error) {
+    console.error('❌ Error deleting export receipt:', error);
     next(error);
   }
 };

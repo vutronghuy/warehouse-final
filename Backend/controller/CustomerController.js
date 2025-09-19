@@ -245,6 +245,66 @@ exports.deleteCustomer = async (req, res, next) => {
   }
 };
 
+// Create new customer by staff (simplified version for export receipts)
+exports.createCustomerByStaff = async (req, res, next) => {
+  try {
+    const { name, phone, address } = req.body;
+
+    // Validate required fields
+    if (!name || !phone || !address) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, phone, and address are required"
+      });
+    }
+
+    // Check if phone already exists
+    const existingPhone = await Customer.findOne({
+      phone: phone.trim(),
+      deletedAt: null,
+    });
+    if (existingPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number already exists",
+        existingCustomer: {
+          _id: existingPhone._id,
+          name: existingPhone.name,
+          phone: existingPhone.phone,
+          address: existingPhone.address
+        }
+      });
+    }
+
+    // Create new customer with minimal required fields
+    const customerData = {
+      name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      status: 'active',
+      createdBy: req.user.sub
+    };
+
+    const customer = new Customer(customerData);
+    await customer.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Customer created successfully",
+      customer: {
+        _id: customer._id,
+        name: customer.name,
+        phone: customer.phone,
+        address: customer.address,
+        status: customer.status
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error creating customer by staff:', error);
+    next(error);
+  }
+};
+
 // Get active customers for dropdown
 exports.getActiveCustomers = async (req, res, next) => {
   try {

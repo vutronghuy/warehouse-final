@@ -238,7 +238,7 @@ export default {
   },
   created() {
     // set baseURL here (component-level override)
-    axios.defaults.baseURL = 'http://localhost:3003';
+    axios.defaults.baseURL = 'http://localhost:3001';
 
     // ensure Authorization header exists if token present
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');

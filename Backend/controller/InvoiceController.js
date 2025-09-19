@@ -3,6 +3,7 @@ const ExportReceipt = require("../models/export/ExportReceipt");
 const Product = require("../models/products/product");
 const User = require("../models/User");
 const mongoose = require("mongoose");
+const socketService = require("../services/socketService");
 
 // Create invoice from export receipt (Staff only)
 const createInvoiceFromExport = async (req, res, next) => {
@@ -77,15 +78,20 @@ const createInvoiceFromExport = async (req, res, next) => {
       });
     }
 
+    // Kiểm tra xem đã có invoice nào cho export receipt này chưa
     const existingInvoice = await Invoice.findOne({
       exportReceiptId: exportReceiptId,
       deletedAt: null,
     });
+    
     if (existingInvoice) {
-      return res.status(400).json({
-        success: false,
+      // Nếu đã có invoice, trả về thông tin invoice hiện có thay vì lỗi
+      return res.status(200).json({
+        success: true,
         message: "Invoice already exists for this export receipt",
+        invoice: existingInvoice,
         invoiceNumber: existingInvoice.invoiceNumber,
+        isExisting: true,
       });
     }
 
@@ -244,6 +250,15 @@ const createInvoiceFromExport = async (req, res, next) => {
       { path: "details.productId", select: "name sku" },
     ]);
 
+    // Emit Socket.IO notification
+    socketService.notifyInvoiceCreated(invoice);
+
+    // Notify chart data update
+    socketService.notifyChartDataUpdated('invoice', {
+      invoiceId: invoice._id,
+      action: 'created'
+    });
+
     res.status(201).json({
       success: true,
       message: "Invoice created successfully",
@@ -251,6 +266,192 @@ const createInvoiceFromExport = async (req, res, next) => {
     });
   } catch (error) {
     console.error("❌ Error creating invoice:", error);
+    next(error);
+  }
+};
+
+// Create invoice from export receipt (Force - Staff only)
+const createInvoiceFromExportForce = async (req, res, next) => {
+  try {
+    console.log("🚀 CREATE INVOICE FROM EXPORT FORCE CALLED!");
+    console.log("🔍 Request body:", JSON.stringify(req.body, null, 2));
+
+    const {
+      exportReceiptId,
+      paymentCondition = "net30",
+      currency = "VND",
+      note,
+      vatRate = 10,
+    } = req.body;
+
+    if (!exportReceiptId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Export receipt ID is required" });
+    }
+
+    const user = await User.findById(req.user.sub).lean();
+    if (!user || req.user.role !== "staff") {
+      return res
+        .status(403)
+        .json({ success: false, message: "Only staff can create invoices" });
+    }
+
+    const warehouseId = user.staff?.warehouseId;
+    if (!warehouseId) {
+      return res.status(400).json({
+        success: false,
+        message: "Staff must be assigned to a warehouse",
+      });
+    }
+
+    console.log("🔍 Looking for export receipt:", exportReceiptId);
+    const exportReceipt = await ExportReceipt.findById(exportReceiptId)
+      .populate({
+        path: "details.productId",
+        select: "name sku finalPrice basePrice price priceMarkupPercent",
+        model: "Product",
+      })
+      .lean();
+
+    if (!exportReceipt) {
+      return res.status(404).json({
+        success: false,
+        message: "Export receipt not found",
+      });
+    }
+
+    if (exportReceipt.status !== "approved") {
+      return res.status(400).json({
+        success: false,
+        message: "Export receipt must be approved to create invoice",
+      });
+    }
+
+    if (exportReceipt.warehouseId.toString() !== warehouseId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Export receipt does not belong to your warehouse",
+      });
+    }
+
+    // Không kiểm tra duplicate - tạo invoice mới bất chấp
+    const invoiceNumber = await Invoice.generateInvoiceNumber();
+
+    // Exchange rates (USD as base currency)
+    const exchangeRates = {
+      USD: 1,
+      VND: 26363,
+      EUR: 0.86,
+      JPY: 110,
+    };
+
+    const baseCurrency = "USD";
+    const targetCurrency = currency.toUpperCase();
+
+    // Calculate dates
+    const issueDate = new Date();
+    let daysToAdd = 30;
+    switch (paymentCondition) {
+      case "cash":
+        daysToAdd = 0;
+        break;
+      case "net15":
+        daysToAdd = 15;
+        break;
+      case "net30":
+        daysToAdd = 30;
+        break;
+      case "net45":
+        daysToAdd = 45;
+        break;
+      case "net60":
+        daysToAdd = 60;
+        break;
+    }
+    const dueDate = new Date(
+      issueDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000
+    );
+
+    const invoice = new Invoice({
+      invoiceNumber,
+      exportReceiptId,
+      customerName: exportReceipt.customerName,
+      customerAddress: exportReceipt.customerAddress,
+      customerPhone: exportReceipt.customerPhone,
+      paymentCondition,
+      currency: targetCurrency,
+      note,
+      vatRate,
+      issueDate,
+      dueDate,
+      warehouseId,
+      createdByStaff: req.user.sub,
+      status: "pending",
+      items: [],
+      totalAmount: 0,
+      vatAmount: 0,
+      grandTotal: 0,
+    });
+
+    // iterate details - **note**: declare vars inside loop to avoid ReferenceError
+    for (const [idx, detail] of exportReceipt.details.entries()) {
+      const product = detail.productId;
+      if (!product) {
+        console.warn(`⚠️ Product not found for detail ${idx}`);
+        continue;
+      }
+
+      const basePrice = product.finalPrice || product.basePrice || product.price || 0;
+      const quantity = detail.quantity || 0;
+      const lineTotal = basePrice * quantity;
+
+      // Convert to target currency
+      const convertedPrice = basePrice * (exchangeRates[targetCurrency] / exchangeRates[baseCurrency]);
+      const convertedLineTotal = convertedPrice * quantity;
+
+      invoice.items.push({
+        productId: product._id,
+        productName: product.name,
+        sku: product.sku,
+        quantity,
+        unitPrice: convertedPrice,
+        lineTotal: convertedLineTotal,
+      });
+
+      invoice.totalAmount += convertedLineTotal;
+    }
+
+    // Calculate VAT and grand total
+    invoice.vatAmount = (invoice.totalAmount * vatRate) / 100;
+    invoice.grandTotal = invoice.totalAmount + invoice.vatAmount;
+
+    await invoice.save();
+
+    // Populate the invoice with product details
+    await invoice.populate([
+      { path: "exportReceiptId", select: "receiptNumber customerName" },
+      { path: "warehouseId", select: "name address" },
+      { path: "createdByStaff", select: "username email" },
+      { path: "items.productId", select: "name sku" },
+    ]);
+
+    // Emit Socket.IO notification
+    socketService.notifyInvoiceCreated(invoice);
+
+    // Notify chart data update
+    socketService.notifyChartDataUpdated('invoice', {
+      invoiceId: invoice._id,
+      action: 'created'
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Invoice created successfully (force mode)",
+      invoice,
+    });
+  } catch (error) {
+    console.error("❌ Error creating invoice (force):", error);
     next(error);
   }
 };
@@ -589,6 +790,31 @@ const reviewInvoice = async (req, res, next) => {
       { path: "exportReceiptId", select: "receiptNumber" },
     ]);
 
+    // Emit Socket.IO events for real-time updates
+    try {
+      const socketService = require('../services/socketService');
+      
+      if (action === 'approve') {
+        // Notify invoice approved
+        socketService.notifyInvoiceApproved(invoice);
+        console.log('📢 Socket.IO: Invoice approved notification sent');
+      } else {
+        // Notify invoice rejected
+        socketService.notifyInvoiceRejected(invoice);
+        console.log('📢 Socket.IO: Invoice rejected notification sent');
+      }
+      
+      // Notify chart data updated
+      socketService.notifyChartDataUpdated('invoice', { 
+        invoiceId: invoice._id, 
+        action: action === 'approve' ? 'approved' : 'rejected' 
+      });
+      console.log('📊 Socket.IO: Chart data updated notification sent');
+      
+    } catch (socketError) {
+      console.warn('⚠️ Socket.IO notification failed:', socketError.message);
+    }
+
     res.json({
       success: true,
       message: `Invoice ${action}d successfully`,
@@ -729,67 +955,6 @@ const updateInvoice = async (req, res, next) => {
   }
 };
 
-// Delete invoice (Staff only, before review)
-const deleteInvoice = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid invoice ID",
-      });
-    }
-
-    // Get user info
-    const user = await User.findById(req.user.sub).lean();
-    if (!user || req.user.role !== "staff") {
-      return res.status(403).json({
-        success: false,
-        message: "Only staff can delete invoices",
-      });
-    }
-
-    // Find invoice
-    const invoice = await Invoice.findById(id);
-    if (!invoice || invoice.deletedAt) {
-      return res.status(404).json({
-        success: false,
-        message: "Invoice not found",
-      });
-    }
-
-    // Check if user created this invoice
-    if (invoice.createdByStaff.toString() !== req.user.sub) {
-      return res.status(403).json({
-        success: false,
-        message: "You can only delete invoices you created",
-      });
-    }
-
-    // Check if invoice can be deleted
-    if (invoice.status !== "draft" && invoice.status !== "rejected") {
-      return res.status(400).json({
-        success: false,
-        message: "Invoice cannot be deleted in current status",
-      });
-    }
-
-    // Soft delete
-    invoice.deletedAt = new Date();
-    invoice.updatedBy = req.user.sub;
-    await invoice.save();
-
-    res.json({
-      success: true,
-      message: "Invoice deleted successfully",
-    });
-  } catch (error) {
-    console.error("❌ Error deleting invoice:", error);
-    next(error);
-  }
-};
-
 // Get total revenue from all invoices
 const getTotalRevenue = async (req, res, next) => {
   try {
@@ -826,8 +991,90 @@ const getTotalRevenue = async (req, res, next) => {
   }
 };
 
+// Delete invoice (Staff only)
+const deleteInvoice = async (req, res, next) => {
+  try {
+    console.log('🗑️ DELETE INVOICE CALLED!');
+    console.log('🔍 Invoice ID:', req.params.id);
+    console.log('🔍 User:', req.user);
+
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invoice ID is required'
+      });
+    }
+
+    const user = await User.findById(req.user.sub).lean();
+    if (!user || req.user.role !== 'staff') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only staff can delete invoices'
+      });
+    }
+
+    // Find the invoice
+    const invoice = await Invoice.findById(id);
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    // Check if invoice belongs to the same warehouse
+    const warehouseId = user.staff?.warehouseId;
+    if (invoice.warehouseId.toString() !== warehouseId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete invoices from your warehouse'
+      });
+    }
+
+    // Check if invoice can be deleted (only pending invoices)
+    if (invoice.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only pending invoices can be deleted'
+      });
+    }
+
+    // Soft delete the invoice
+    invoice.deletedAt = new Date();
+    await invoice.save();
+
+    console.log('✅ Invoice deleted successfully:', invoice._id);
+
+    // Send notification to accounters about invoice deletion
+    socketService.notifyInvoiceDeleted(invoice);
+
+    // Notify chart data update
+    socketService.notifyChartDataUpdated('invoice', {
+      invoiceId: invoice._id,
+      action: 'deleted'
+    });
+
+    res.json({
+      success: true,
+      message: 'Invoice deleted successfully',
+      invoice: {
+        id: invoice._id,
+        invoiceNumber: invoice.invoiceNumber,
+        deletedAt: invoice.deletedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Delete invoice error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   createInvoiceFromExport,
+  createInvoiceFromExportForce,
   getAllInvoices,
   getInvoiceById,
   reviewInvoice,

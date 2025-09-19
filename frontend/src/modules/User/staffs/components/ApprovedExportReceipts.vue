@@ -16,6 +16,15 @@
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
+      <select
+        v-model="invoiceFilter"
+        @change="loadConfirmedExports"
+        class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="all">All Export Receipts</option>
+        <option value="with-invoice">With Invoice</option>
+        <option value="without-invoice">Without Invoice</option>
+      </select>
       <button
         @click="resetSearch"
         class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -45,19 +54,36 @@
               Status
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Invoice Status
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="receipt in confirmedExports" :key="receipt._id">
+          <tr v-for="receipt in confirmedExports" :key="receipt._id" :class="hasInvoice(receipt._id) ? 'bg-gray-50' : ''">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-              {{ receipt.receiptNumber }}
+              <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1">
+                  <span v-if="hasInvoice(receipt._id)" class="text-green-600">✓</span>
+                  <span v-else class="text-gray-400">○</span>
+                  {{ receipt.receiptNumber }}
+                </div>
+                <span v-if="hasInvoice(receipt._id)" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Invoice Created
+                </span>
+              </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="flex items-center gap-3">
                 <div
-                  class="w-10 h-10 bg-gradient-to-br from-[#6A4C93] to-[#8E63B9] rounded-full flex items-center justify-center text-white font-semibold"
+                  :class="[
+                    'w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold',
+                    hasInvoice(receipt._id)
+                      ? 'bg-gray-400'
+                      : 'bg-gradient-to-br from-[#6A4C93] to-[#8E63B9]'
+                  ]"
                 >
                   {{ getUserInitials(receipt.customerName) }}
                 </div>
@@ -73,22 +99,53 @@
             <td class="px-6 py-4 whitespace-nowrap">
               <span
                 class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800"
-                >{{ receipt.status }}</span
               >
+                {{ receipt.status }}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span
+                v-if="hasInvoice(receipt._id)"
+                class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800"
+              >
+                ✓ {{ getInvoiceStatus(receipt._id) }}
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600"
+              >
+                ⏳ Pending
+              </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-              <button
-                @click="$emit('create-invoice', receipt)"
-                :disabled="hasInvoice(receipt._id)"
-                :class="[
-                  'px-3 py-1 rounded text-sm',
-                  hasInvoice(receipt._id)
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700',
-                ]"
-              >
-                {{ hasInvoice(receipt._id) ? 'Invoice Created' : 'Create Invoice' }}
-              </button>
+              <div class="flex items-center gap-2">
+                <button
+                  @click="$emit('create-invoice', receipt)"
+                  :disabled="hasInvoice(receipt._id)"
+                  :class="[
+                    'px-4 py-2 rounded-md text-sm font-medium transition-all duration-200',
+                    hasInvoice(receipt._id)
+                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed border border-gray-300'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md',
+                  ]"
+                >
+                  <span v-if="hasInvoice(receipt._id)" class="flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Already Created
+                  </span>
+                  <span v-else class="flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Create Invoice
+                  </span>
+                </button>
+                <div v-if="hasInvoice(receipt._id)" class="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                  {{ getInvoiceNumber(receipt._id) }}
+                </div>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -173,6 +230,7 @@ const isLoading = ref(false);
 const pagination = ref(null);
 const currentPage = ref(1);
 const searchTimeout = ref(null);
+const invoiceFilter = ref('all');
 
 // Methods
 const getUserInitials = (name) => {
@@ -197,6 +255,34 @@ const hasInvoice = (exportReceiptId) => {
   });
 };
 
+const getInvoiceNumber = (exportReceiptId) => {
+  const invoice = props.myInvoices.find((invoice) => {
+    const rid = invoice.exportReceiptId ? invoice.exportReceiptId._id || invoice.exportReceiptId : null;
+    return rid && String(rid) === String(exportReceiptId);
+  });
+  return invoice ? invoice.invoiceNumber : '';
+};
+
+const getInvoiceStatus = (exportReceiptId) => {
+  const invoice = props.myInvoices.find((invoice) => {
+    const rid = invoice.exportReceiptId ? invoice.exportReceiptId._id || invoice.exportReceiptId : null;
+    return rid && String(rid) === String(exportReceiptId);
+  });
+
+  if (!invoice) return 'Not Created';
+
+  switch (invoice.status) {
+    case 'pending':
+      return 'Pending Review';
+    case 'approved':
+      return 'Approved';
+    case 'rejected':
+      return 'Rejected';
+    default:
+      return 'Created';
+  }
+};
+
 const debounceSearch = () => {
   if (searchTimeout.value) {
     clearTimeout(searchTimeout.value);
@@ -209,6 +295,7 @@ const debounceSearch = () => {
 
 const resetSearch = () => {
   exportSearch.value = '';
+  invoiceFilter.value = 'all';
   currentPage.value = 1;
   loadConfirmedExports();
 };
@@ -229,7 +316,16 @@ const loadConfirmedExports = async () => {
 
     const response = await axios.get('/api/export-receipts/confirmed', { params });
     if (response.data?.success) {
-      confirmedExports.value = response.data.exportReceipts || [];
+      let exports = response.data.exportReceipts || [];
+
+      // Apply invoice filter
+      if (invoiceFilter.value === 'with-invoice') {
+        exports = exports.filter(receipt => hasInvoice(receipt._id));
+      } else if (invoiceFilter.value === 'without-invoice') {
+        exports = exports.filter(receipt => !hasInvoice(receipt._id));
+      }
+
+      confirmedExports.value = exports;
       pagination.value = response.data.pagination;
     } else {
       console.warn('API returned success: false for confirmed exports');

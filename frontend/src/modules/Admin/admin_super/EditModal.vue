@@ -124,7 +124,7 @@
 <script>
 import axios from 'axios';
 import { notifyWarehouseUpdate } from '@/utils/warehouseUtils.js';
-axios.defaults.baseURL = 'http://localhost:3003';
+axios.defaults.baseURL = 'http://localhost:3001';
 
 export default {
   name: 'EditUserModal',

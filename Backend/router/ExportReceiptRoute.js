@@ -75,6 +75,9 @@ router.post('/', verifyToken, requireStaff, exportReceiptController.createExport
 // PUT /api/export-receipts/:id - Update export receipt (Staff only, status must be 'created')
 router.put('/:id', verifyToken, requireStaff, exportReceiptController.updateExportReceipt);
 
+// DELETE /api/export-receipts/:id - Delete export receipt (Staff only, status must be 'created' or 'rejected')
+router.delete('/:id', verifyToken, requireStaff, exportReceiptController.deleteExportReceipt);
+
 // PUT /api/export-receipts/:id/manager-review - Manager review receipt
 router.put('/:id/manager-review', verifyToken, requireManager, exportReceiptController.managerReviewReceipt);
 

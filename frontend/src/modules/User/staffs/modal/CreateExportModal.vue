@@ -173,8 +173,14 @@
                   type="number"
                   min="1"
                   :max="getMaxQuantity(line.productId)"
+                  @input="validateQuantityInput(line, $event)"
+                  @blur="validateQuantityInput(line, $event)"
                   class="w-full px-3 py-2 border rounded"
+                  :class="{ 'border-red-500': isQuantityInvalid(line) }"
                 />
+                <div v-if="isQuantityInvalid(line)" class="text-xs text-red-500 mt-1">
+                  Max: {{ getMaxQuantity(line.productId) }}
+                </div>
               </div>
 
               <div class="w-24 text-sm text-gray-700">
@@ -454,8 +460,21 @@ export default {
       }
       return true;
     },
-    onSubmit() {
+    async onSubmit() {
       if (!this.validate()) return;
+
+      // If adding new customer, try to save to database (optional)
+      if (this.showNewCustomerForm && this.form.customerName && this.form.customerPhone && this.form.customerAddress) {
+        try {
+          await this.saveNewCustomer();
+        } catch (error) {
+          console.warn('⚠️ Could not save customer to database:', error.message);
+          // Don't block the export receipt creation if customer save fails
+          // Customer info will still be saved in the export receipt
+          this.$emit('error', `Note: Customer info will be saved in export receipt only. Database save failed: ${error.message}`);
+        }
+      }
+
       // emit payload for parent to call API
       const payload = {
         customerName: this.form.customerName,
@@ -465,6 +484,165 @@ export default {
         details: this.form.details.map((d) => ({ productId: d.productId, quantity: Number(d.quantity) })),
       };
       this.$emit('submit', payload);
+    },
+
+    // Validate quantity input in real-time
+    validateQuantityInput(line, event) {
+      const maxQty = this.getMaxQuantity(line.productId);
+      const inputValue = parseInt(event.target.value) || 0;
+
+      if (inputValue > maxQty) {
+        // Reset to max available quantity
+        line.quantity = maxQty;
+        event.target.value = maxQty;
+
+        // Show error message
+        this.$emit('error', `Maximum available quantity for this product is ${maxQty}`);
+      } else if (inputValue < 1) {
+        // Reset to minimum quantity
+        line.quantity = 1;
+        event.target.value = 1;
+      }
+    },
+
+    // Check if quantity is invalid
+    isQuantityInvalid(line) {
+      if (!line.productId) return false;
+      const maxQty = this.getMaxQuantity(line.productId);
+      return line.quantity > maxQty || line.quantity < 1;
+    },
+
+    // Save new customer to database
+    async saveNewCustomer() {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const customerData = {
+          name: this.form.customerName.trim(),
+          phone: this.form.customerPhone.trim(),
+          address: this.form.customerAddress.trim()
+        };
+
+        console.log('🔄 Saving customer:', customerData);
+
+        const response = await fetch('/api/customers/staff', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(customerData)
+        });
+
+        console.log('📡 Response status:', response.status);
+        console.log('📡 Response headers:', response.headers);
+
+        // Check if response is ok
+        if (!response.ok) {
+          let errorText;
+          try {
+            errorText = await response.text();
+          } catch (e) {
+            errorText = 'Could not read error response';
+          }
+          console.error('❌ Response error:', errorText);
+
+          // Provide more specific error messages
+          if (response.status === 404) {
+            throw new Error('Customer creation endpoint not available. Customer info will be saved in export receipt only.');
+          } else if (response.status === 401) {
+            throw new Error('Authentication required for customer creation.');
+          } else if (response.status === 403) {
+            throw new Error('Permission denied for customer creation.');
+          } else {
+            throw new Error(`HTTP ${response.status}: ${errorText || 'Unknown error'}`);
+          }
+        }
+
+        // Try to parse JSON
+        let result;
+        try {
+          result = await response.json();
+        } catch (jsonError) {
+          console.error('❌ JSON parse error:', jsonError);
+          const responseText = await response.text();
+          throw new Error(`Invalid JSON response: ${responseText}`);
+        }
+
+        console.log('📡 Response data:', result);
+
+        if (result.success) {
+          // Emit event to parent to refresh customer list
+          this.$emit('customer-created', result.customer);
+          console.log('✅ Customer saved successfully:', result.customer.name);
+
+          // Also save to local storage for future use
+          this.saveCustomerToLocalStorage(result.customer);
+        } else {
+          // If customer already exists, we can still proceed
+          if (result.existingCustomer) {
+            console.log('ℹ️ Customer already exists:', result.existingCustomer.name);
+            this.$emit('customer-exists', result.existingCustomer);
+
+            // Save existing customer to local storage
+            this.saveCustomerToLocalStorage(result.existingCustomer);
+          } else {
+            throw new Error(result.message || 'Failed to save customer');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error saving customer:', error);
+
+        // If API fails, save to localStorage as fallback
+        const fallbackCustomer = {
+          _id: 'local_' + Date.now(),
+          name: customerData.name,
+          phone: customerData.phone,
+          address: customerData.address,
+          status: 'active',
+          isLocal: true
+        };
+
+        this.saveCustomerToLocalStorage(fallbackCustomer);
+        console.log('💾 Customer saved to localStorage as fallback');
+
+        throw error;
+      }
+    },
+
+    // Save customer to localStorage for future use
+    saveCustomerToLocalStorage(customer) {
+      try {
+        const existingCustomers = JSON.parse(localStorage.getItem('localCustomers') || '[]');
+
+        // Check if customer already exists (by phone)
+        const existingIndex = existingCustomers.findIndex(c => c.phone === customer.phone);
+
+        if (existingIndex >= 0) {
+          // Update existing customer
+          existingCustomers[existingIndex] = customer;
+        } else {
+          // Add new customer
+          existingCustomers.push(customer);
+        }
+
+        // Keep only last 50 customers to avoid localStorage bloat
+        if (existingCustomers.length > 50) {
+          existingCustomers.splice(0, existingCustomers.length - 50);
+        }
+
+        localStorage.setItem('localCustomers', JSON.stringify(existingCustomers));
+        console.log('💾 Customer saved to localStorage:', customer.name);
+
+        // Emit event to parent to update customer list
+        this.$emit('customer-saved-locally', customer);
+      } catch (error) {
+        console.error('❌ Error saving customer to localStorage:', error);
+      }
     },
   },
   watch: {

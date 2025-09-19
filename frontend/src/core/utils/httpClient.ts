@@ -7,7 +7,7 @@ import { BaseClient } from './baseClient';
  * It has token refresh logic.
  */
 export const httpClient: AxiosInstance = new BaseClient({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
   withActionRefresh: true,
   withActionLogout: true,
 }).create();
@@ -17,5 +17,5 @@ export const httpClient: AxiosInstance = new BaseClient({
  * It should NOT have token refresh logic to avoid infinite loops.
  */
 export const authApiClient: AxiosInstance = new BaseClient({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
 }).create();

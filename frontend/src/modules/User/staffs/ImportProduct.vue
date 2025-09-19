@@ -1,5 +1,19 @@
 <template>
   <div class="min-h-screen bg-gray-50 p-6">
+    <!-- Error banner -->
+    <div v-if="showError" class="mb-6">
+      <div class="flex items-start justify-between bg-red-50 border border-red-200 text-red-900 rounded-lg p-4">
+        <div class="flex items-center">
+          <svg class="h-6 w-6 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 4.93a10.5 10.5 0 1114.85 14.85A10.5 10.5 0 014.93 4.93z" />
+          </svg>
+          <div class="text-sm">
+            <p class="font-medium">{{ errorMessage }}</p>
+          </div>
+        </div>
+        <button @click="hideError" class="text-red-700 hover:text-red-900 text-sm font-medium ml-4">Close</button>
+      </div>
+    </div>
     <!-- Success banner -->
     <div v-if="showSuccess" class="mb-6">
       <div class="flex items-start justify-between bg-green-50 border border-green-200 text-green-900 rounded-lg p-4">
@@ -163,17 +177,7 @@
         </div>
       </div>
 
-      <!-- Error Details -->
-      <div v-if="importResults.errors && importResults.errors.length > 0" class="mt-6">
-        <h3 class="text-md font-medium text-red-800 mb-3">Import Errors</h3>
-        <div class="bg-red-50 border border-red-200 rounded-lg p-4 max-h-60 overflow-y-auto">
-          <div v-for="(error, index) in importResults.errors" :key="index" class="mb-2 last:mb-0">
-            <p class="text-sm text-red-700">
-              <span class="font-medium">Row {{ error.row }}:</span> {{ error.message }}
-            </p>
-          </div>
-        </div>
-      </div>
+      <!-- Error details hidden to avoid exposing debug info in UI -->
     </div>
 
     <!-- Instructions -->
@@ -214,7 +218,9 @@ export default {
       importResults: null,
       showSuccess: false,
       successMessage: '',
-      autoHideTimer: null
+      autoHideTimer: null,
+      showError: false,
+      errorMessage: ''
     };
   },
   methods: {
@@ -303,6 +309,10 @@ export default {
       }
     },
 
+    hideError() {
+      this.showError = false;
+    },
+
     async uploadFile() {
       if (!this.selectedFile) return;
 
@@ -334,27 +344,10 @@ export default {
         }
 
       } catch (error) {
-        console.error('Error uploading file:', error);
-        // show server response if available
-        if (error.response && error.response.data) {
-          console.error('Server response:', error.response.data);
-          const srv = error.response.data;
-          // nếu server trả errors array
-          if (srv.errors && srv.errors.length) {
-            this.importResults = {
-              total: srv.total || 0,
-              successful: srv.successful || 0,
-              failed: srv.failed || srv.errors.length,
-              errors: srv.errors
-            };
-          } else if (srv.message) {
-            alert(`Failed to import: ${srv.message}`);
-          } else {
-            alert(`Failed to import: ${JSON.stringify(srv)}`);
-          }
-        } else {
-          alert('Failed to import products. Network error or server did not respond.');
-        }
+        // Hide debug info and show a friendly notice only
+        this.importResults = null;
+        this.errorMessage = 'Failed to import products. Please check your Excel file and required columns.';
+        this.showError = true;
       } finally {
         this.isUploading = false;
       }

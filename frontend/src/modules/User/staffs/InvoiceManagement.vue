@@ -85,6 +85,10 @@ import ViewInvoiceModal from './modal/ViewInvoiceModal.vue';
 import EditInvoiceModal from './modal/EditInvoiceModal.vue';
 import ApprovedExportReceipts from './components/ApprovedExportReceipts.vue';
 import MyInvoices from './components/MyInvoices.vue';
+import { useNotificationStore } from '@/store/modules/notification/slice';
+
+// Notification store
+const notificationStore = useNotificationStore();
 
 // Reactive data
 const activeTab = ref('confirmed-exports');
@@ -166,10 +170,38 @@ const handleCreateSubmit = async (payload) => {
     });
 
     if (response.data?.success) {
-      showMessage('Invoice created successfully!', 'success');
-      await loadMyInvoices();
-      closeCreateModal();
-      activeTab.value = 'my-invoices';
+      if (response.data.isExisting) {
+        // Invoice đã tồn tại - hỏi user có muốn tạo lại không
+        const existingInvoice = response.data.invoice;
+        const shouldRecreate = confirm(
+          `Invoice ${response.data.invoiceNumber} already exists for this export receipt.\n\n` +
+          `Do you want to create a new invoice anyway? (This will create a duplicate)`
+        );
+
+        if (shouldRecreate) {
+          // Tạo invoice mới bất chấp duplicate
+          await createInvoiceFromExportForce(payload);
+        } else {
+          // Hiển thị invoice hiện có
+          showMessage(`Invoice ${response.data.invoiceNumber} already exists for this export receipt`, 'info');
+          await loadMyInvoices();
+          closeCreateModal();
+          activeTab.value = 'my-invoices';
+        }
+      } else {
+        // Invoice mới được tạo
+        showMessage('Invoice created successfully!', 'success');
+
+        // Tạo notification cho accounter
+        const createdInvoice = response.data.invoice;
+        if (createdInvoice) {
+          notificationStore.notifyInvoiceCreated(createdInvoice);
+        }
+
+        await loadMyInvoices();
+        closeCreateModal();
+        activeTab.value = 'my-invoices';
+      }
     } else {
       // server trả { success: false, message: ... }
       showMessage(response.data?.message || 'Failed to create invoice', 'error');
@@ -180,6 +212,47 @@ const handleCreateSubmit = async (payload) => {
     console.error('Response data:', error.response?.data);
     const errBody = error.response?.data;
     // prioritize human-friendly messages
+    let errMsg = error.message || 'Failed to create invoice';
+    if (errBody) {
+      if (typeof errBody.message === 'string') errMsg = errBody.message;
+      else if (errBody.errors) errMsg = JSON.stringify(errBody.errors);
+      else errMsg = JSON.stringify(errBody);
+    }
+    showMessage(errMsg, 'error');
+  } finally {
+    isCreating.value = false;
+  }
+};
+
+// Tạo invoice mới bất chấp duplicate
+const createInvoiceFromExportForce = async (payload) => {
+  try {
+    isCreating.value = true;
+
+    const response = await axios.post('/api/invoices/from-export-force', {
+      exportReceiptId: selectedExport.value._id,
+      ...payload,
+    });
+
+    if (response.data?.success) {
+      showMessage('New invoice created successfully!', 'success');
+
+      // Tạo notification cho accounter
+      const createdInvoice = response.data.invoice;
+      if (createdInvoice) {
+        notificationStore.notifyInvoiceCreated(createdInvoice);
+      }
+
+      await loadMyInvoices();
+      closeCreateModal();
+      activeTab.value = 'my-invoices';
+    } else {
+      showMessage(response.data?.message || 'Failed to create invoice', 'error');
+    }
+  } catch (error) {
+    console.error('Full axios error:', error);
+    console.error('Response data:', error.response?.data);
+    const errBody = error.response?.data;
     let errMsg = error.message || 'Failed to create invoice';
     if (errBody) {
       if (typeof errBody.message === 'string') errMsg = errBody.message;
@@ -259,6 +332,16 @@ const deleteInvoice = async (invoice) => {
     const response = await axios.delete(`/api/invoices/${invoice._id}`);
     if (response.data?.success) {
       showMessage('Invoice deleted', 'success');
+
+      // Remove notification for this invoice
+      const notificationStore = useNotificationStore();
+      const invoiceNotifications = notificationStore.notifications.filter(
+        n => n.type === 'invoice_created' && n.data?._id === invoice._id
+      );
+      invoiceNotifications.forEach(notification => {
+        notificationStore.deleteNotification(notification.id);
+      });
+
       await loadMyInvoices();
       // if the deleted invoice was open in modals, close them
       if (selectedInvoice.value && String(selectedInvoice.value._id) === String(invoice._id)) {

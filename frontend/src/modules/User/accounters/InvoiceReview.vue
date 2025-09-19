@@ -203,9 +203,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import InvoiceDetailModal from './InvoiceDetailModal.vue'; // adjust path as needed
+import socketService from '@/services/socketService';
 
 // Reactive data
 const activeTab = ref('pending');
@@ -318,9 +319,19 @@ const submitReview = async () => {
     );
 
     if (response.data?.success) {
-      // refresh list
-      await loadInvoices();
+      // Update the invoice in the list immediately (real-time update)
+      const invoiceIndex = invoices.value.findIndex(inv => inv._id === selectedInvoice.value._id);
+      if (invoiceIndex !== -1) {
+        invoices.value[invoiceIndex].status = reviewAction.value === 'approve' ? 'approved' : 'rejected';
+        invoices.value[invoiceIndex].reviewedAt = new Date().toISOString();
+        invoices.value[invoiceIndex].reviewComment = reviewComment.value;
+      }
+
+      // Close modal
       closeReviewModal();
+
+      // Show success message
+      console.log(`✅ Invoice ${reviewAction.value === 'approve' ? 'approved' : 'rejected'} successfully`);
     } else {
       // handle failure
       alert(response.data?.message || 'Review failed');
@@ -404,5 +415,60 @@ const getStatusClass = (status) => {
 // Lifecycle
 onMounted(() => {
   loadInvoices();
+  initializeSocket();
 });
+
+onBeforeUnmount(() => {
+  // Disconnect Socket.IO when component is unmounted
+  socketService.disconnect();
+});
+
+// Socket.IO initialization
+const initializeSocket = () => {
+  console.log('🚀 Initializing Socket.IO for Invoice Review...');
+  const socket = socketService.connect();
+  if (socket) {
+    console.log('🏠 Joining accounter room...');
+    socket.emit('join-room', 'accounters');
+  } else {
+    console.warn('⚠️ Socket not available, invoices will not update in real-time');
+  }
+
+  // Listen for invoice events
+  socketService.on('invoice-approved', (data) => {
+    console.log('✅ Invoice Review - Invoice approved:', data);
+    // Update the specific invoice in the list
+    const invoiceIndex = invoices.value.findIndex(inv => inv._id === data.data?._id);
+    if (invoiceIndex !== -1) {
+      invoices.value[invoiceIndex].status = 'approved';
+      invoices.value[invoiceIndex].reviewedAt = data.data?.reviewedAt;
+      invoices.value[invoiceIndex].reviewComment = data.data?.reviewComment;
+    }
+  });
+
+  socketService.on('invoice-rejected', (data) => {
+    console.log('❌ Invoice Review - Invoice rejected:', data);
+    // Update the specific invoice in the list
+    const invoiceIndex = invoices.value.findIndex(inv => inv._id === data.data?._id);
+    if (invoiceIndex !== -1) {
+      invoices.value[invoiceIndex].status = 'rejected';
+      invoices.value[invoiceIndex].reviewedAt = data.data?.reviewedAt;
+      invoices.value[invoiceIndex].reviewComment = data.data?.reviewComment;
+    }
+  });
+
+  socketService.on('invoice-created', (data) => {
+    console.log('📄 Invoice Review - Invoice created:', data);
+    // Add new invoice to the list if it's pending review
+    if (data.data?.status === 'pending_review') {
+      invoices.value.unshift(data.data);
+    }
+  });
+
+  socketService.on('invoice-deleted', (data) => {
+    console.log('🗑️ Invoice Review - Invoice deleted:', data);
+    // Remove invoice from the list
+    invoices.value = invoices.value.filter(inv => inv._id !== data.data?._id);
+  });
+};
 </script>

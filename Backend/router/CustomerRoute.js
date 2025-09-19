@@ -40,6 +40,19 @@ router.get('/:id', disableCache, verifyToken, requireAdminOrSuperAdmin, customer
 // POST /api/customers - Create new customer (Admin and Super Admin only)
 router.post('/', verifyToken, requireAdminOrSuperAdmin, customerController.createCustomer);
 
+// Test route to debug
+router.get('/test', (req, res) => {
+  res.json({ success: true, message: 'Customer route is working', timestamp: new Date() });
+});
+
+// POST /api/customers/staff - Create new customer (Staff can create for export receipts)
+router.post('/staff', (req, res, next) => {
+  console.log('🔍 Staff customer creation endpoint hit');
+  console.log('🔍 Request body:', req.body);
+  console.log('🔍 Request user:', req.user);
+  next();
+}, verifyToken, requireStaffOrAbove, customerController.createCustomerByStaff);
+
 // PUT /api/customers/:id - Update customer (Admin and Super Admin only)
 router.put('/:id', verifyToken, requireAdminOrSuperAdmin, customerController.updateCustomer);
 

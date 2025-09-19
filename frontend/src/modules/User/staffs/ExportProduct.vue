@@ -182,6 +182,9 @@
       @close="closeCreateModal"
       @submit="handleCreateSubmit"
       @error="showMessage"
+      @customer-created="handleCustomerCreated"
+      @customer-exists="handleCustomerExists"
+      @customer-saved-locally="handleCustomerSavedLocally"
     />
 
     <ViewExportModal
@@ -218,6 +221,7 @@ import axios from 'axios';
 import CreateExportModal from './modal/CreateExportModal.vue';
 import ViewExportModal from './modal/ViewExportModal.vue';
 import EditExportModal from './modal/EditExportModal.vue';
+import { useNotificationStore } from '@/store/modules/notification/slice';
 
 export default {
   name: 'ExportProduct',
@@ -225,6 +229,12 @@ export default {
     CreateExportModal,
     ViewExportModal,
     EditExportModal,
+  },
+  setup() {
+    const notificationStore = useNotificationStore();
+    return {
+      notificationStore,
+    };
   },
   data() {
     return {
@@ -253,9 +263,13 @@ export default {
   },
   computed: {
     messageClass() {
-      return this.messageType === 'success'
-        ? 'bg-green-50 text-green-800 border border-green-200'
-        : 'bg-red-50 text-red-800 border border-red-200';
+      if (this.messageType === 'success') {
+        return 'bg-green-50 text-green-800 border border-green-200';
+      } else if (this.messageType === 'info') {
+        return 'bg-blue-50 text-blue-800 border border-blue-200';
+      } else {
+        return 'bg-red-50 text-red-800 border border-red-200';
+      }
     },
     // available products for create: all products that are not out of stock
     modalProductsForCreate() {
@@ -367,10 +381,41 @@ export default {
         const resp = await axios.get('/api/customers/active', {
           headers: { Authorization: token ? `Bearer ${token}` : undefined },
         });
-        this.customers = resp.data.customers || [];
+
+        // Get customers from API
+        const apiCustomers = resp.data.customers || [];
+
+        // Get customers from localStorage
+        const localCustomers = this.getLocalCustomers();
+
+        // Merge customers (API customers first, then local customers that don't exist in API)
+        const allCustomers = [...apiCustomers];
+        localCustomers.forEach(localCustomer => {
+          const existsInAPI = apiCustomers.some(apiCustomer => apiCustomer.phone === localCustomer.phone);
+          if (!existsInAPI) {
+            allCustomers.push(localCustomer);
+          }
+        });
+
+        this.customers = allCustomers;
+        console.log(`📋 Loaded ${apiCustomers.length} API customers + ${localCustomers.length} local customers`);
       } catch (err) {
         console.error('Error fetching customers:', err);
-        this.showMessage('Failed to load customers', 'error');
+
+        // Fallback to localStorage only
+        this.customers = this.getLocalCustomers();
+        this.showMessage('Using local customers only. API unavailable.', 'info');
+      }
+    },
+
+    // Get customers from localStorage
+    getLocalCustomers() {
+      try {
+        const localCustomers = JSON.parse(localStorage.getItem('localCustomers') || '[]');
+        return localCustomers.filter(customer => customer && customer.name && customer.phone);
+      } catch (error) {
+        console.error('Error loading local customers:', error);
+        return [];
       }
     },
 
@@ -409,11 +454,35 @@ export default {
       this.isCreating = true;
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        console.log('Token for export creation:', token ? 'Present' : 'Missing');
+        console.log('Token value:', token);
+        const headers = {};
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+        console.log('Headers being sent:', headers);
+
+        // Fallback: try to get token from axios defaults
+        if (!token && axios.defaults.headers.common['Authorization']) {
+          console.log('Using token from axios defaults');
+          headers.Authorization = axios.defaults.headers.common['Authorization'];
+        }
+
+        // Final fallback: use axios defaults without explicit headers
+        if (!headers.Authorization) {
+          console.log('No token found, using axios defaults');
+          const resp = await axios.post('/api/export-receipts', payload);
+          return resp;
+        }
         const resp = await axios.post('/api/export-receipts', payload, {
-          headers: { Authorization: token ? `Bearer ${token}` : undefined },
+          headers,
         });
         if (resp.data?.success) {
           this.showMessage('Export receipt created successfully!', 'success');
+
+          // Send notification to manager
+          this.notificationStore.notifyExportCreated(resp.data.exportReceipt);
+
           this.closeCreateModal();
           this.currentPage = 1; // Reset to first page
           await this.fetchExportReceipts();
@@ -427,6 +496,28 @@ export default {
       } finally {
         this.isCreating = false;
       }
+    },
+
+    // Handle customer created event
+    async handleCustomerCreated(customer) {
+      console.log('✅ New customer created:', customer.name);
+      this.showMessage(`Customer "${customer.name}" saved successfully!`, 'success');
+      // Refresh customer list
+      await this.fetchCustomers();
+    },
+
+    // Handle customer exists event
+    handleCustomerExists(existingCustomer) {
+      console.log('ℹ️ Customer already exists:', existingCustomer.name);
+      this.showMessage(`Customer "${existingCustomer.name}" already exists in database`, 'info');
+    },
+
+    // Handle customer saved locally event
+    handleCustomerSavedLocally(customer) {
+      console.log('💾 Customer saved locally:', customer.name);
+      this.showMessage(`Customer "${customer.name}" saved locally for future use`, 'info');
+      // Refresh customer list to include the new local customer
+      this.fetchCustomers();
     },
 
     // View

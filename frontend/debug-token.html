@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Token</title>
+</head>
+<body>
+    <h1>Token Debug</h1>
+    <div id="results"></div>
+    
+    <script>
+        function debugToken() {
+            const results = document.getElementById('results');
+            
+            // Check localStorage
+            const localToken = localStorage.getItem('token');
+            const localUser = localStorage.getItem('user');
+            
+            // Check sessionStorage
+            const sessionToken = sessionStorage.getItem('token');
+            const sessionUser = sessionStorage.getItem('user');
+            
+            let html = '<h2>Debug Results:</h2>';
+            
+            html += '<h3>localStorage:</h3>';
+            html += `<p>Token: ${localToken ? 'Found (' + localToken.length + ' chars)' : 'Not found'}</p>`;
+            html += `<p>User: ${localUser ? 'Found' : 'Not found'}</p>`;
+            
+            html += '<h3>sessionStorage:</h3>';
+            html += `<p>Token: ${sessionToken ? 'Found (' + sessionToken.length + ' chars)' : 'Not found'}</p>`;
+            html += `<p>User: ${sessionUser ? 'Found' : 'Not found'}</p>`;
+            
+            if (localToken) {
+                html += '<h3>Token Analysis:</h3>';
+                const parts = localToken.split('.');
+                html += `<p>Token parts: ${parts.length}</p>`;
+                html += `<p>Token start: ${localToken.substring(0, 30)}...</p>`;
+                html += `<p>Token end: ...${localToken.substring(localToken.length - 30)}</p>`;
+                
+                // Try to decode header
+                try {
+                    const header = JSON.parse(atob(parts[0]));
+                    html += `<p>Header: ${JSON.stringify(header)}</p>`;
+                } catch (e) {
+                    html += `<p>Header decode error: ${e.message}</p>`;
+                }
+                
+                // Try to decode payload
+                try {
+                    const payload = JSON.parse(atob(parts[1]));
+                    html += `<p>Payload: ${JSON.stringify(payload)}</p>`;
+                    html += `<p>Expires: ${new Date(payload.exp * 1000)}</p>`;
+                } catch (e) {
+                    html += `<p>Payload decode error: ${e.message}</p>`;
+                }
+            }
+            
+            results.innerHTML = html;
+        }
+        
+        // Run debug on load
+        debugToken();
+        
+        // Add button to clear storage
+        document.body.innerHTML += '<br><button onclick="clearStorage()">Clear All Storage</button>';
+        document.body.innerHTML += '<br><button onclick="debugToken()">Refresh Debug</button>';
+        
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            alert('Storage cleared!');
+            debugToken();
+        }
+    </script>
+</body>
+</html>

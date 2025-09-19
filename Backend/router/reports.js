@@ -23,14 +23,20 @@ router.get('/cash-flow', verifyToken, requireAccounterOrAdmin, reportsController
 
 // GET /api/reports/inventory-value - Giá trị hàng hóa tồn kho theo thời gian
 router.get('/inventory-value', verifyToken, requireAccounterOrAdmin, reportsController.getInventoryValue);
+// FIFO-based ending inventory
+router.get('/inventory-value-fifo', verifyToken, requireAccounterOrAdmin, reportsController.getInventoryValueFIFO);
 
 // GET /api/reports/cash-flow-time-series - Dữ liệu cash flow theo thời gian (cho line chart)
 router.get('/cash-flow-time-series', verifyToken, requireAccounterOrAdmin, reportsController.getCashFlowTimeSeries);
+
+// GET /api/reports/total-import-cost - Tổng chi phí từ ImportReceipt
+router.get('/total-import-cost', verifyToken, requireAccounterOrAdmin, reportsController.getTotalImportCost);
 
 // Test endpoints without authentication (for development only)
 router.get('/test/top-products', reportsController.getTopProducts);
 router.get('/test/cash-flow', reportsController.getCashFlow);
 router.get('/test/inventory-value', reportsController.getInventoryValue);
 router.get('/test/cash-flow-time-series', reportsController.getCashFlowTimeSeries);
+router.get('/test/total-import-cost', reportsController.getTotalImportCost);
 
 module.exports = router;

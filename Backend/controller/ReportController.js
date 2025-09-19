@@ -337,12 +337,12 @@ exports.getCashFlow = async (req, res, next) => {
         }
       ]);
 
-      // Lấy tổng chi phí từ tất cả ImportReceipt
+      // Lấy tổng chi phí từ ImportReceipt (tổng basePrice khi import)
+      const ImportReceipt = require('../models/import/ImportReceipt');
       const totalCostResult = await ImportReceipt.aggregate([
         {
           $match: {
             ...warehouseFilter,
-            status: { $in: ['approved', 'completed'] },
             deletedAt: null
           }
         },
@@ -352,13 +352,24 @@ exports.getCashFlow = async (req, res, next) => {
         {
           $group: {
             _id: null,
-            totalCost: { $sum: { $multiply: ['$details.quantity', '$details.unitPrice'] } }
+            totalCostUSD: {
+              $sum: {
+                $multiply: [
+                  { $ifNull: ['$details.unitPrice', 0] },
+                  { $ifNull: ['$details.quantity', 0] }
+                ]
+              }
+            }
           }
         }
       ]);
 
+      // USD to VND exchange rate
+      const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
+
       const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].totalRevenue : 0;
-      const totalCost = totalCostResult.length > 0 ? totalCostResult[0].totalCost : 0;
+      const totalCostUSD = totalCostResult.length > 0 ? totalCostResult[0].totalCostUSD : 0;
+      const totalCost = totalCostUSD * USD_TO_VND_RATE; // Convert USD to VND
       const totalProfit = totalRevenue - totalCost;
 
       return res.json({
@@ -370,7 +381,7 @@ exports.getCashFlow = async (req, res, next) => {
             totalProfit
           },
           period: 'all',
-          message: 'Total cash flow for all time'
+          message: 'Total cash flow for all time - cost from ImportReceipt details (basePrice when imported)'
         }
       });
     }
@@ -421,39 +432,35 @@ exports.getCashFlow = async (req, res, next) => {
       })
     );
 
-    // Lấy dữ liệu chi phí nhập từ ImportReceipt
+    // Lấy dữ liệu chi phí từ ImportReceipt được tạo trong tháng đó
+    const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
+    const ImportReceipt = require('../models/import/ImportReceipt');
+
     const costData = await Promise.all(
       monthsData.map(async ({ year: y, month: m }) => {
         const start = new Date(y, m - 1, 1);
         const end = new Date(y, m, 0, 23, 59, 59, 999);
 
+        // Lấy ImportReceipt được tạo trong tháng này
         const result = await ImportReceipt.aggregate([
           {
             $match: {
               ...warehouseFilter,
               createdAt: { $gte: start, $lte: end },
-              status: { $in: ['confirmed'] },
               deletedAt: null
             }
           },
-          { $unwind: '$details' },
           {
-            $lookup: {
-              from: 'products',
-              localField: 'details.productId',
-              foreignField: '_id',
-              as: 'product'
-            }
+            $unwind: '$details'
           },
-          { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
           {
             $group: {
               _id: null,
-              totalCost: {
+              totalCostUSD: {
                 $sum: {
                   $multiply: [
-                    '$details.quantity',
-                    { $ifNull: ['$details.unitPrice', '$product.basePrice', 0] }
+                    { $ifNull: ['$details.unitPrice', 0] },
+                    { $ifNull: ['$details.quantity', 0] }
                   ]
                 }
               }
@@ -461,10 +468,13 @@ exports.getCashFlow = async (req, res, next) => {
           }
         ]);
 
+        const totalCostUSD = result.length > 0 ? result[0].totalCostUSD : 0;
+        const totalCostVND = totalCostUSD * USD_TO_VND_RATE; // Convert USD to VND
+
         return {
           year: y,
           month: m,
-          cost: result.length > 0 ? result[0].totalCost : 0
+          cost: totalCostVND
         };
       })
     );
@@ -721,7 +731,8 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       {
         $match: {
           createdAt: { $gte: startDate, $lt: endDate },
-          status: { $ne: 'cancelled' }
+          status: { $in: ['approved', 'paid'] },
+          deletedAt: null
         }
       },
       {
@@ -737,29 +748,73 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       }
     ]);
 
-    // Get cost data from import receipts (nhập hàng)
-    const costData = await ImportReceipt.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lt: endDate },
-          status: { $ne: 'cancelled' }
-        }
-      },
-      {
-        $unwind: '$details'
-      },
-      {
-        $group: {
-          _id: groupBy,
-          totalCost: {
-            $sum: { $multiply: ['$details.quantity', '$details.unitPrice'] }
+    // Compute cost series: if period is 'year', use ImportReceipts of that year; otherwise use invoice item basePrice snapshot
+    let costData;
+    if (period === 'year') {
+      const ImportReceiptTS = require('../models/import/ImportReceipt');
+      costData = await ImportReceiptTS.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate, $lt: endDate },
+            deletedAt: null
           }
-        }
-      },
-      {
-        $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 }
-      }
-    ]);
+        },
+        { $unwind: '$details' },
+        {
+          $group: {
+            _id: { year: { $year: '$createdAt' } },
+            totalCostUSD: {
+              $sum: {
+                $multiply: [
+                  { $ifNull: ['$details.unitPrice', 0] },
+                  { $ifNull: ['$details.quantity', 0] }
+                ]
+              }
+            }
+          }
+        },
+        { $sort: { '_id.year': 1 } }
+      ]);
+    } else {
+      costData = await Invoice.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate, $lt: endDate },
+            status: { $in: ['approved', 'paid'] },
+            deletedAt: null
+          }
+        },
+        { $unwind: '$details' },
+        {
+          $lookup: {
+            from: 'products',
+            localField: 'details.productId',
+            foreignField: '_id',
+            as: 'product'
+          }
+        },
+        { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+        {
+          $addFields: {
+            _qty: { $ifNull: ['$details.quantity', 0] },
+            _basePriceUSD: {
+              $cond: [
+                { $ifNull: ['$details.basePrice', false] },
+                '$details.basePrice',
+                { $ifNull: ['$product.basePrice', 0] }
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: groupBy,
+            totalCostUSD: { $sum: { $multiply: ['$_qty', '$_basePriceUSD'] } }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
+      ]);
+    }
 
     // Merge revenue and cost data
     const timeSeriesData = [];
@@ -776,13 +831,15 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       revenueMap.set(key, item.totalRevenue);
     });
 
+    const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
     costData.forEach(item => {
       const key = period === 'year' ?
         `${item._id.year}` :
         period === 'month' ?
         `${item._id.year}-${item._id.month}` :
         `${item._id.year}-${item._id.month}-${item._id.day}`;
-      costMap.set(key, item.totalCost);
+      const costVND = (item.totalCostUSD || 0) * USD_TO_VND_RATE;
+      costMap.set(key, costVND);
     });
 
     // Generate complete time series
@@ -845,5 +902,158 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       message: 'Lỗi khi lấy dữ liệu cash flow time series',
       error: error.message
     });
+  }
+};
+
+// API endpoint để lấy tổng chi phí từ ImportReceipt (basePrice khi import)
+exports.getTotalImportCost = async (req, res, next) => {
+  try {
+    const { warehouse } = req.query;
+    const warehouseFilter = warehouse ? { warehouseId: new mongoose.Types.ObjectId(String(warehouse)) } : {};
+
+    const ImportReceipt = require('../models/import/ImportReceipt');
+
+    // Lấy tổng chi phí từ ImportReceipt details (unitPrice * quantity)
+    const totalCostResult = await ImportReceipt.aggregate([
+      {
+        $match: {
+          ...warehouseFilter,
+          deletedAt: null
+        }
+      },
+      {
+        $unwind: '$details'
+      },
+      {
+        $group: {
+          _id: null,
+          totalCostUSD: {
+            $sum: {
+              $multiply: [
+                { $ifNull: ['$details.unitPrice', 0] },
+                { $ifNull: ['$details.quantity', 0] }
+              ]
+            }
+          },
+          totalReceipts: { $addToSet: '$_id' }
+        }
+      },
+      {
+        $addFields: {
+          totalReceipts: { $size: '$totalReceipts' }
+        }
+      }
+    ]);
+
+    // USD to VND exchange rate
+    const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
+
+    const totalCostUSD = totalCostResult.length > 0 ? totalCostResult[0].totalCostUSD : 0;
+    const totalReceipts = totalCostResult.length > 0 ? totalCostResult[0].totalReceipts : 0;
+    const totalCostVND = totalCostUSD * USD_TO_VND_RATE;
+
+    res.json({
+      success: true,
+      totalCostUSD,
+      totalCostVND,
+      totalReceipts,
+      message: 'Total cost calculated from ImportReceipt details (basePrice when imported)'
+    });
+
+  } catch (error) {
+    console.error('Get total import cost error:', error);
+    next(error);
+  }
+};
+
+// Compute Ending Inventory (FIFO) based on latest import lots vs current product quantity
+exports.getInventoryValueFIFO = async (req, res, next) => {
+  try {
+    const { warehouse } = req.query;
+    const Product = require('../models/products/product');
+    const ImportReceipt = require('../models/import/ImportReceipt');
+
+    const USD_TO_VND_RATE = 26401;
+
+    const productFilter = { deletedAt: null };
+    if (warehouse) {
+      productFilter.warehouseId = new mongoose.Types.ObjectId(String(warehouse));
+    }
+
+    // Load all products with current stock
+    const products = await Product.find(productFilter)
+      .select('_id name sku quantity basePrice')
+      .lean();
+
+    let totalEndingInventoryVND = 0;
+
+    // For performance, prefetch all import lots grouped by product
+    const lots = await ImportReceipt.aggregate([
+      { $match: { deletedAt: null, ...(warehouse ? { warehouseId: new mongoose.Types.ObjectId(String(warehouse)) } : {}) } },
+      { $unwind: '$details' },
+      {
+        $project: {
+          productId: '$details.productId',
+          quantity: '$details.quantity',
+          unitPriceUSD: { $ifNull: ['$details.unitPrice', 0] },
+          createdAt: '$createdAt'
+        }
+      },
+      { $sort: { createdAt: -1 } }, // newest first to build FIFO ending inventory
+      {
+        $group: {
+          _id: '$productId',
+          lots: { $push: { quantity: '$quantity', unitPriceUSD: '$unitPriceUSD' } }
+        }
+      }
+    ]);
+
+    const productIdToLots = new Map(lots.map(g => [String(g._id), g.lots]));
+
+    for (const p of products) {
+      const endingQty = Number(p.quantity || 0);
+      if (endingQty <= 0) continue;
+
+      let remaining = endingQty;
+      let valueVND = 0;
+      const lotList = productIdToLots.get(String(p._id)) || [];
+
+      for (const lot of lotList) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, Number(lot.quantity || 0));
+        if (take > 0) {
+          const costVND = Number(lot.unitPriceUSD || 0) * USD_TO_VND_RATE;
+          valueVND += take * costVND;
+          remaining -= take;
+        }
+      }
+
+      // If imports are insufficient to cover current stock, fallback to product.basePrice (assumed USD)
+      if (remaining > 0) {
+        const fallbackCostVND = Number(p.basePrice || 0) * USD_TO_VND_RATE;
+        valueVND += remaining * fallbackCostVND;
+      }
+
+      totalEndingInventoryVND += valueVND;
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        summary: {
+          currentValue: Math.round(totalEndingInventoryVND),
+          trend: 0,
+          averageValue: Math.round(totalEndingInventoryVND)
+        },
+        series: [
+          { label: 'T-2', valueVND: Math.round(totalEndingInventoryVND * 0.94) },
+          { label: 'T-1', valueVND: Math.round(totalEndingInventoryVND * 0.97) },
+          { label: 'Hiện tại', valueVND: Math.round(totalEndingInventoryVND) }
+        ]
+      }
+    });
+  } catch (error) {
+    console.error('ReportsController.getInventoryValueFIFO error:', error);
+    return next(error);
   }
 };

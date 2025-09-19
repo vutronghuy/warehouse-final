@@ -42,7 +42,20 @@
               </div>
 
               <div class="w-28">
-                <input v-model.number="d.quantity" type="number" min="1" :max="getMaxQuantity(d.productId)" class="w-full px-3 py-2 border rounded" />
+                <label class="block text-xs text-gray-500 mb-1">Quantity</label>
+                <input
+                  v-model.number="d.quantity"
+                  type="number"
+                  min="1"
+                  :max="getMaxQuantityForEdit(d.productId, d.quantity)"
+                  @input="validateQuantityInput(d, $event)"
+                  @blur="validateQuantityInput(d, $event)"
+                  class="w-full px-3 py-2 border rounded"
+                  :class="{ 'border-red-500': isQuantityInvalid(d) }"
+                />
+                <div v-if="isQuantityInvalid(d)" class="text-xs text-red-500 mt-1">
+                  Max: {{ getMaxQuantityForEdit(d.productId, d.quantity) }}
+                </div>
               </div>
 
               <div class="w-24 text-sm text-gray-700">${{ calculateProductPrice(d.productId) }}</div>
@@ -155,6 +168,23 @@ export default {
       const p = this.availableProducts.find(x => x._id === productId);
       return p ? p.quantity : 0;
     },
+
+    // Get max quantity for edit (considering current reserved quantity)
+    getMaxQuantityForEdit(productId, currentQuantity) {
+      const p = this.availableProducts.find(x => x._id === productId);
+      if (!p) return 0;
+
+      // For edit mode, we need to consider the original quantity that was reserved
+      const originalDetail = this.receipt?.details?.find(d => {
+        const pid = typeof d.productId === 'object' ? d.productId._id : d.productId;
+        return pid === productId;
+      });
+
+      const originalQuantity = originalDetail ? originalDetail.quantity : 0;
+
+      // Available = current stock + original reserved quantity
+      return p.quantity + originalQuantity;
+    },
     calculateProductPrice(productId) {
       if (this.getProductPrice) return this.getProductPrice(productId);
       const p = this.availableProducts.find(x => x._id === productId);
@@ -171,15 +201,40 @@ export default {
         return false;
       }
       const invalid = valid.some(d => {
-        const p = this.availableProducts.find(x => x._id === d.productId);
-        // allow product that is selected even if current stock 0 (parent should include selected)
-        return !p || Number(d.quantity) > Number(p.quantity);
+        const maxQty = this.getMaxQuantityForEdit(d.productId, d.quantity);
+        return Number(d.quantity) > maxQty;
       });
       if (invalid) {
         this.$emit('error', 'One or more quantities exceed available stock');
         return false;
       }
       return true;
+    },
+
+    // Validate quantity input in real-time
+    validateQuantityInput(detail, event) {
+      const maxQty = this.getMaxQuantityForEdit(detail.productId, detail.quantity);
+      const inputValue = parseInt(event.target.value) || 0;
+
+      if (inputValue > maxQty) {
+        // Reset to max available quantity
+        detail.quantity = maxQty;
+        event.target.value = maxQty;
+
+        // Show error message
+        this.$emit('error', `Maximum available quantity for this product is ${maxQty}`);
+      } else if (inputValue < 1) {
+        // Reset to minimum quantity
+        detail.quantity = 1;
+        event.target.value = 1;
+      }
+    },
+
+    // Check if quantity is invalid
+    isQuantityInvalid(detail) {
+      if (!detail.productId) return false;
+      const maxQty = this.getMaxQuantityForEdit(detail.productId, detail.quantity);
+      return detail.quantity > maxQty || detail.quantity < 1;
     },
     onSubmit() {
       if (!this.validate()) return;

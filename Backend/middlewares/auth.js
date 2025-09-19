@@ -8,7 +8,29 @@ exports.verifyToken = (req, res, next) => {
     if (!auth || !auth.startsWith('Bearer ')) {
       return res.status(401).json({ ok: false, message: 'No token provided.' });
     }
+
     const token = auth.split(' ')[1];
+
+    // Debug: Log token info (first/last few chars only for security)
+    console.log('🔍 Token debug:', {
+      tokenLength: token ? token.length : 0,
+      tokenStart: token ? token.substring(0, 10) + '...' : 'null',
+      tokenEnd: token ? '...' + token.substring(token.length - 10) : 'null'
+    });
+
+    // Validate token format
+    if (!token || token.length < 10) {
+      console.error('❌ Token too short or empty');
+      return res.status(401).json({ ok: false, message: 'Invalid token format.' });
+    }
+
+    // Check if token has proper JWT structure (3 parts separated by dots)
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      console.error('❌ Token does not have 3 parts:', tokenParts.length);
+      return res.status(401).json({ ok: false, message: 'Malformed token structure.' });
+    }
+
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload;
     return next();
@@ -20,6 +42,13 @@ exports.verifyToken = (req, res, next) => {
         ok: false,
         message: 'token_expired',
         expiredAt: err.expiredAt,
+      });
+    }
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        ok: false,
+        message: 'Token is malformed. Please login again.',
+        error: 'jwt_malformed'
       });
     }
     return res.status(401).json({ ok: false, message: 'Invalid or expired token.' });

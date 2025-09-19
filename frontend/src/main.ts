@@ -10,7 +10,7 @@ import 'ant-design-vue/dist/reset.css';
 import './assets/styles/app.scss';
 
 // --- axios global setup ---
-axios.defaults.baseURL = 'http://localhost:3003'; // chỉnh nếu backend chạy port khác
+axios.defaults.baseURL = 'http://localhost:3001'; // chỉnh nếu backend chạy port khác
 axios.defaults.withCredentials = true; // nếu dùng refresh token trong cookie, cần gửi credentials
 
 // Lấy token (localStorage ưu tiên, fallback sessionStorage)

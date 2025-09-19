@@ -334,6 +334,7 @@ import axios from 'axios';
 import Sidebar from './sidebar.vue';
 import Header from './headbar.vue';
 import Chart from 'chart.js/auto'; // npm i chart.js
+import socketService from '@/services/socketService';
 
 // initial dates
 const now = new Date();
@@ -355,7 +356,12 @@ const invoiceFilter = ref({
   month: currentMonthInput,
   date: currentDayISO,
 });
-const targetFilter = ref({ period: 'month', year: currentYear, month: currentMonthInput, date: currentDayISO });
+const targetFilter = ref({
+  period: 'month',
+  year: currentYear,
+  month: currentMonthInput,
+  date: currentDayISO,
+});
 
 // monthly sales year (chart)
 const salesYear = ref(currentYear);
@@ -372,10 +378,18 @@ const target = ref({ metrics: { revenue: 0 } });
 
 // monthly series sample
 const monthSeries = ref([
-  { month: 1, total: 150 }, { month: 2, total: 380 }, { month: 3, total: 190 },
-  { month: 4, total: 290 }, { month: 5, total: 180 }, { month: 6, total: 190 },
-  { month: 7, total: 280 }, { month: 8, total: 100 }, { month: 9, total: 200 },
-  { month: 10, total: 380 }, { month: 11, total: 270 }, { month: 12, total: 110 },
+  { month: 1, total: 150 },
+  { month: 2, total: 380 },
+  { month: 3, total: 190 },
+  { month: 4, total: 290 },
+  { month: 5, total: 180 },
+  { month: 6, total: 190 },
+  { month: 7, total: 280 },
+  { month: 8, total: 100 },
+  { month: 9, total: 200 },
+  { month: 10, total: 380 },
+  { month: 11, total: 270 },
+  { month: 12, total: 110 },
 ]);
 const chartMax = ref(400); // will store raw max of months only
 const todayRevenue = ref(0);
@@ -395,7 +409,11 @@ const formatNumber = (n) => {
 const formatCurrency = (v) => {
   if (v === null || v === undefined) return '-';
   const n = Number(v) || 0;
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(n);
 };
 const monthShortName = (m) => new Date(0, m - 1).toLocaleString(undefined, { month: 'short' });
 
@@ -408,13 +426,6 @@ function getYStep(max, steps = 4) {
   const mul = Math.ceil(raw / base);
   return mul * base;
 }
-const niceMax = (val) => {
-  const v = Math.max(1, Math.ceil(val));
-  const exp = Math.floor(Math.log10(v));
-  const base = Math.pow(10, exp);
-  const mul = Math.ceil(v / base);
-  return mul * base;
-};
 
 // NEW: desired number of Y steps (you can change this number)
 const yAxisSteps = 8;
@@ -422,13 +433,10 @@ const yAxisSteps = 8;
 // Compute step and yMax based on raw max
 function computeStepAndMax(maxVal, steps = 6) {
   const raw = Math.max(0, Number(maxVal) || 0);
-  const step = getYStep(raw, steps);               // "nice" step size
+  const step = getYStep(raw, steps); // "nice" step size
   const yMax = Math.max(step, Math.ceil(raw / step) * step); // round up to nearest step multiple
   return { step, yMax };
 }
-
-// derive sales year from salesYear state
-const displaySalesYear = computed(() => salesYear.value || currentYear);
 
 // ----- Progress percent for target (use target.value.metrics.revenue) -----
 const targetProgressPercent = computed(() => {
@@ -538,9 +546,12 @@ async function fetchMonthlySales() {
 
 async function fetchTarget() {
   try {
+    console.log('🎯 fetchTarget called - refreshing monthly target data');
+
     if (targetInput.value !== null && targetInput.value !== undefined && targetInput.value !== '') {
       const n = Number(targetInput.value);
       appliedTarget.value = Number.isFinite(n) ? n : null;
+      console.log('🎯 Using manual target input:', appliedTarget.value);
     } else {
       const tq = {};
       if (targetFilter.value.period === 'month') {
@@ -549,21 +560,27 @@ async function fetchTarget() {
         tq.month = mm || Number(currentMonth);
       } else if (targetFilter.value.period === 'day') {
         tq.date = targetFilter.value.date || currentDayISO;
-        const [y, mm, dd] = (tq.date).split('-').map(Number);
-        tq.year = y; tq.month = mm; tq.day = dd;
+        const [y, mm, dd] = tq.date.split('-').map(Number);
+        tq.year = y;
+        tq.month = mm;
+        tq.day = dd;
       } else {
         tq.year = targetFilter.value.year || currentYear;
       }
 
       try {
+        console.log('🎯 Fetching target from API with params:', tq);
         const tRes = await axios.get('/api/targets', { params: tq });
         const d = tRes.data || {};
         if (d.targetAmount !== undefined) appliedTarget.value = Number(d.targetAmount);
         else if (d.amount !== undefined) appliedTarget.value = Number(d.amount);
         else if (Array.isArray(d.targets) && tq.month) {
-          const found = d.targets.find((t) => Number(t.month) === Number(tq.month) && Number(t.year) === Number(tq.year));
+          const found = d.targets.find(
+            (t) => Number(t.month) === Number(tq.month) && Number(t.year) === Number(tq.year),
+          );
           appliedTarget.value = found ? Number(found.amount) : null;
         } else appliedTarget.value = null;
+        console.log('🎯 Target amount set to:', appliedTarget.value);
       } catch (err) {
         console.warn('targets fetch failed', err?.response?.data ?? err.message);
         appliedTarget.value = null;
@@ -571,9 +588,15 @@ async function fetchTarget() {
     }
 
     const revenueQ = buildQueryFromFilter(targetFilter.value);
+    console.log('🎯 Fetching revenue data with params:', revenueQ);
     const revRes = await axios.get('/api/invoices/dashboard', { params: revenueQ });
-    if (revRes.data?.success) target.value.metrics.revenue = Number(revRes.data.revenue) || 0;
-    else target.value.metrics.revenue = 0;
+    if (revRes.data?.success) {
+      target.value.metrics.revenue = Number(revRes.data.revenue) || 0;
+      console.log('🎯 Revenue updated to:', target.value.metrics.revenue);
+    } else {
+      target.value.metrics.revenue = 0;
+      console.log('🎯 Revenue set to 0 (no success response)');
+    }
 
     // if targetFilter asks day, update today's revenue accordingly (or always update from invoiceFilter/day)
     if (targetFilter.value.period === 'day') {
@@ -582,6 +605,8 @@ async function fetchTarget() {
       // ensure todayRevenue is kept up-to-date with invoiceFilter or default today
       await fetchDailyRevenue(); // default today
     }
+
+    console.log('🎯 Target progress percent:', targetProgressPercent.value);
   } catch (err) {
     console.warn('fetchTarget error', err?.response?.data ?? err.message);
     appliedTarget.value = null;
@@ -738,6 +763,9 @@ function updateSalesChart() {
 }
 
 onBeforeUnmount(() => {
+  // Disconnect Socket.IO
+  socketService.disconnect();
+
   if (salesChart)
     try {
       salesChart.destroy();
@@ -802,8 +830,98 @@ function formatPercent(value, digits = 2) {
   return Number(n).toFixed(digits);
 }
 
+// Socket.IO initialization
+const initializeSocket = () => {
+  console.log('🚀 Initializing Socket.IO for Admin Dashboard...');
+
+  // Connect to Socket.IO
+  const socket = socketService.connect();
+
+  // Join admin room
+  if (socket) {
+    console.log('🏠 Joining admin room...');
+    socket.emit('join-room', 'admins');
+  } else {
+    console.warn('⚠️ Socket not available, charts will not update in real-time');
+  }
+
+  // Listen for chart data updates
+  socketService.on('chart-data-updated', (data) => {
+    console.log('📊 Admin Dashboard - Chart data updated:', data);
+
+    // Refresh all charts based on update type
+    if (data.type === 'sales' || data.type === 'all') {
+      console.log('📊 Refreshing sales data...');
+      fetchMonthlySales();
+    }
+    if (data.type === 'customers' || data.type === 'all') {
+      console.log('📊 Refreshing customers data...');
+      fetchCustomers();
+    }
+    if (data.type === 'invoices' || data.type === 'all') {
+      console.log('📊 Refreshing invoices data...');
+      fetchInvoices();
+    }
+    if (data.type === 'target' || data.type === 'all') {
+      console.log('📊 Refreshing target data...');
+      fetchTarget();
+    }
+
+    // Always refresh target for invoice events
+    if (data.type === 'invoice' || data.type === 'all') {
+      console.log('📊 Refreshing target data for invoice event...');
+      fetchTarget();
+    }
+  });
+
+  // Listen for invoice events
+  socketService.on('invoice-created', () => {
+    console.log('📄 Admin Dashboard - Invoice created - refreshing charts');
+    fetchMonthlySales();
+    fetchInvoices();
+    fetchTarget(); // Add target refresh for monthly target
+  });
+
+  socketService.on('invoice-deleted', () => {
+    console.log('🗑️ Admin Dashboard - Invoice deleted - refreshing charts');
+    fetchMonthlySales();
+    fetchInvoices();
+    fetchTarget(); // Add target refresh for monthly target
+  });
+
+  socketService.on('invoice-approved', () => {
+    console.log('✅ Admin Dashboard - Invoice approved - refreshing charts');
+    fetchMonthlySales();
+    fetchInvoices();
+    fetchTarget(); // Add target refresh for monthly target
+  });
+
+  socketService.on('invoice-rejected', () => {
+    console.log('❌ Admin Dashboard - Invoice rejected - refreshing charts');
+    fetchMonthlySales();
+    fetchInvoices();
+    fetchTarget(); // Add target refresh for monthly target
+  });
+
+  // Listen for export events
+  socketService.on('export-created', () => {
+    console.log('📦 Admin Dashboard - Export created - refreshing charts');
+    fetchMonthlySales();
+    fetchTarget(); // Add target refresh for monthly target
+  });
+
+  socketService.on('export-approved', () => {
+    console.log('✅ Admin Dashboard - Export approved - refreshing charts');
+    fetchMonthlySales();
+    fetchTarget(); // Add target refresh for monthly target
+  });
+};
+
 // ----------------- Init -----------------
 onMounted(async () => {
+  // Initialize Socket.IO connection
+  initializeSocket();
+
   if (!customerFilter.value.month) customerFilter.value.month = currentMonthInput;
   if (!invoiceFilter.value.month) invoiceFilter.value.month = currentMonthInput;
   if (!targetFilter.value.month) targetFilter.value.month = currentMonthInput;

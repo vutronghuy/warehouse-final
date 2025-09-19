@@ -11,11 +11,17 @@ class AuthService {
   }
 
   async refreshToken() {
-    const res: any = await authApiClient.post('/api/auth/refresh', null, {
-      withCredentials: true,
-    });
-
-    return res;
+    try {
+      console.log('🔄 Attempting to refresh token...');
+      const res: any = await authApiClient.post('/api/auth/refresh', null, {
+        withCredentials: true,
+      });
+      console.log('✅ Token refresh successful:', res);
+      return res;
+    } catch (error) {
+      console.error('❌ Token refresh failed:', error);
+      throw error;
+    }
   }
 }
 

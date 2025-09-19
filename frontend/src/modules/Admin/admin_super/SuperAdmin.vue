@@ -250,7 +250,7 @@ import CreateUserModal from './modal.vue';
 import EditUserModal from './EditModal.vue';
 import Sidebar from './Sidebar.vue';
 import Headers from './header.vue';
-axios.defaults.baseURL = 'http://localhost:3003'; // adjust if needed
+axios.defaults.baseURL = 'http://localhost:3001'; // adjust if needed
 
 export default {
   name: 'AdminDashboard',

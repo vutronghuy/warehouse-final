@@ -1,17 +1,47 @@
-// controller/ProductImportController.js
+const XLSX = require("xlsx");
+const fs = require("fs").promises;
+const fsSync = require("fs");
 const Product = require("../models/products/product");
 const Category = require("../models/products/CategoryNew");
 const Supplier = require("../models/products/Supplier");
 const User = require("../models/User");
-const XLSX = require("xlsx");
-const path = require("path");
+const ImportReceipt = require("../models/import/ImportReceipt");
+const mongoose = require("mongoose");
 
-// filesystem: synchronous helper and promises API
-const fsSync = require("fs");
-const fs = require("fs").promises;
+// --- Counter model for atomic receipt sequence (keeps in this file for convenience) ---
+let ImportCounter;
+try {
+  ImportCounter = mongoose.model("ImportCounter");
+} catch (e) {
+  const counterSchema = new mongoose.Schema({
+    key: { type: String, required: true, unique: true },
+    seq: { type: Number, default: 0 },
+  });
+  ImportCounter = mongoose.model("ImportCounter", counterSchema);
+}
+
+// Helper function to generate receipt number (atomic)
+const generateImportReceiptNumber = async () => {
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
+  const prefix = `IMP${dateStr}`;
+
+  // Atomic increment to avoid race conditions
+  const counter = await ImportCounter.findOneAndUpdate(
+    { key: prefix },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  const sequence = counter.seq || 1;
+  return `${prefix}${String(sequence).padStart(4, "0")}`;
+};
 
 exports.importProducts = async (req, res) => {
   const uploadedPath = req.file ? req.file.path : null;
+
+  // Prices will be stored in USD as entered in Excel
+  console.log("💰 Import prices will be stored in USD");
 
   try {
     console.log("🔍 Import request from user:", {
@@ -22,13 +52,10 @@ exports.importProducts = async (req, res) => {
     });
 
     if (!req.file) {
-      return res
-        .status(400)
-        .json({ success: false, message: "No file uploaded" });
+      return res.status(400).json({ success: false, message: "No file uploaded" });
     }
 
-    // Read workbook
-    const fileBuffer = await fs.readFile(req.file.path);
+    const fileBuffer = await fs.readFile(uploadedPath);
     const workbook = XLSX.read(fileBuffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
@@ -37,81 +64,60 @@ exports.importProducts = async (req, res) => {
     if (!data || data.length === 0) {
       // cleanup
       try {
-        if (uploadedPath && fsSync.existsSync(uploadedPath))
-          await fs.unlink(uploadedPath);
+        if (uploadedPath && fsSync.existsSync(uploadedPath)) await fs.unlink(uploadedPath);
       } catch (e) {
         console.error("cleanup failed", e);
       }
-      return res
-        .status(400)
-        .json({ success: false, message: "Excel file is empty or invalid" });
+      return res.status(400).json({ success: false, message: "Excel file is empty or invalid" });
     }
 
-    // Lookup categories & suppliers (maps)
-    const categories = await Category.find({
-      status: "active",
-      deletedAt: null,
-    }).lean();
-    const suppliers = await Supplier.find({
-      status: "cooperation",
-      deletedAt: null,
-    }).lean();
-    const categoryMap = new Map(
-      categories.map((c) => [String(c.name).toLowerCase(), c._id])
-    );
-    const supplierMap = new Map(
-      suppliers.map((s) => [String(s.name).toLowerCase(), s._id])
-    );
+    console.log(`📊 Processing ${data.length} rows from Excel`);
 
-    // Get user once and determine warehouseId once
+    // Get user and warehouse info
     const user = await User.findById(req.user.sub).lean();
     if (!user) {
       try {
-        if (uploadedPath && fsSync.existsSync(uploadedPath))
-          await fs.unlink(uploadedPath);
+        if (uploadedPath && fsSync.existsSync(uploadedPath)) await fs.unlink(uploadedPath);
       } catch (e) {
         console.error("cleanup failed", e);
       }
-      return res
-        .status(400)
-        .json({ success: false, message: "User not found in database" });
+      return res.status(400).json({ success: false, message: "User not found in database" });
     }
 
+    const role = req.user.roleKey;
     let warehouseId = null;
-    const role = req.user.role;
-    if (role === "staff" && user.staff?.warehouseId)
-      warehouseId = user.staff.warehouseId;
-    else if (role === "manager" && user.manager?.warehouseId)
-      warehouseId = user.manager.warehouseId;
-    else if (role === "accounter" && user.accounter?.warehouseId)
-      warehouseId = user.accounter.warehouseId;
+
+    if (role === "staff" && user.staff?.warehouseId) warehouseId = user.staff.warehouseId;
+    else if (role === "accounter" && user.accounter?.warehouseId) warehouseId = user.accounter.warehouseId;
     else if (role === "admin" && user.admin?.managedWarehouses?.length > 0)
       warehouseId = user.admin.managedWarehouses[0];
 
     if (!warehouseId) {
       try {
-        if (uploadedPath && fsSync.existsSync(uploadedPath))
-          await fs.unlink(uploadedPath);
+        if (uploadedPath && fsSync.existsSync(uploadedPath)) await fs.unlink(uploadedPath);
       } catch (e) {
         console.error("cleanup failed", e);
       }
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: `User with role '${role}' is not assigned to any warehouse`,
-        });
+      return res.status(400).json({
+        success: false,
+        message: "No warehouse assigned to user",
+      });
     }
 
+    console.log(`🏢 Using warehouse: ${warehouseId}`);
+
+    // Initialize results
     const results = {
       total: data.length,
       successful: 0,
       failed: 0,
+      updated: 0,
       errors: [],
     };
-    const validUnits = ["pcs", "kg", "liter", "box", "pack"];
 
-    // Process rows
+    const importedProducts = [];
+
+    // Process each row
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       const rowNumber = i + 2;
@@ -126,155 +132,218 @@ exports.importProducts = async (req, res) => {
           continue;
         }
 
-        const skuVal = row.sku.toString().toUpperCase().trim();
+        const skuVal = String(row.sku).toUpperCase().trim();
 
-        // TÌM product tồn tại cùng sku + warehouseId
+        // Check if product exists
         const existingProduct = await Product.findOne({
           sku: skuVal,
           warehouseId,
         }).lean();
 
+        // Resolve categoryId for this row (try find by name, else create or fallback)
+        let categoryIdForRow = null;
+        const categoryNameRaw = row.category ? String(row.category).trim() : "";
+        if (categoryNameRaw) {
+          const foundCat = await Category.findOne({
+            name: { $regex: new RegExp(`^${categoryNameRaw}$`, "i") },
+            status: "active",
+            deletedAt: null,
+          }).lean();
+
+          if (foundCat) {
+            categoryIdForRow = foundCat._id;
+            // console.log(`Found category: ${foundCat.name}`);
+          } else {
+            // Attempt to create category automatically (if you don't want auto-create, change this behavior)
+            try {
+              const newCat = new Category({
+                name: categoryNameRaw,
+                status: "active",
+                createdBy: req.user.sub,
+                createdAt: new Date(),
+              });
+              await newCat.save();
+              categoryIdForRow = newCat._id;
+              console.log(`🆕 Created category from Excel: ${categoryNameRaw} (${categoryIdForRow})`);
+            } catch (catErr) {
+              console.warn(`⚠️ Could not create category "${categoryNameRaw}":`, catErr.message);
+              categoryIdForRow = null;
+            }
+          }
+        } else {
+          // If no category provided, try to find or create 'Uncategorized' fallback
+          const unc = await Category.findOne({
+            name: { $regex: /^uncategorized$/i },
+            status: "active",
+            deletedAt: null,
+          }).lean();
+          if (unc) categoryIdForRow = unc._id;
+          else {
+            try {
+              const newUnc = new Category({
+                name: "Uncategorized",
+                status: "active",
+                createdBy: req.user.sub,
+                createdAt: new Date(),
+              });
+              await newUnc.save();
+              categoryIdForRow = newUnc._id;
+              console.log(`🆕 Created fallback category "Uncategorized" (${categoryIdForRow})`);
+            } catch (uncErr) {
+              console.warn('⚠️ Could not create fallback "Uncategorized":', uncErr.message);
+              categoryIdForRow = null;
+            }
+          }
+        }
+
         if (existingProduct) {
-          // Quy tắc import: nếu trùng SKU trên cùng warehouse -> UPDATE (không tạo mới)
-          // Cộng dồn quantity (nếu file cung cấp quantity), và cập nhật một số trường nếu có
-          const addQty = Math.max(0, parseInt(row.quantity) || 0); // đảm bảo không âm
+          // Update existing product quantity and price
+          const addQty = Math.max(0, parseInt(row.quantity) || 0);
+          const setFields = { updatedAt: new Date() };
 
-          // Chuẩn bị phần $set
-          const setFields = {
-            updatedAt: new Date(),
-          };
-
-          // Nếu có basePrice trong file và là số hợp lệ -> cập nhật
           if (row.basePrice !== undefined && row.basePrice !== "") {
             const bp = parseFloat(row.basePrice);
             if (!isNaN(bp)) setFields.basePrice = bp;
           }
 
-          if (row.minStockLevel !== undefined && row.minStockLevel !== "") {
-            const minS = parseInt(row.minStockLevel);
-            if (!isNaN(minS)) setFields.minStockLevel = minS;
+          // If categoryId resolved from Excel, set it on update
+          if (categoryIdForRow) {
+            setFields.categoryId = categoryIdForRow;
           }
 
-          if (row.description !== undefined && row.description !== "") {
-            setFields.description = String(row.description).trim();
-          }
-
-          // Nếu tên mới khác tên hiện có -> cập nhật tên (tuỳ bạn có muốn hay không)
-          if (
-            row.name &&
-            String(row.name).trim() &&
-            String(row.name).trim() !== existingProduct.name
-          ) {
-            setFields.name = String(row.name).trim();
-          }
-
-          // Build update object
           const updateOps = {};
           if (addQty > 0) updateOps.$inc = { quantity: addQty };
           if (Object.keys(setFields).length > 0) updateOps.$set = setFields;
 
-          try {
-            if (Object.keys(updateOps).length === 0) {
-              // Không có gì để cập nhật -> vẫn coi là thành công (không thay đổi)
-              results.updated = (results.updated || 0) + 1;
+          if (Object.keys(updateOps).length > 0) {
+            await Product.updateOne({ _id: existingProduct._id }, updateOps);
+          }
+
+          results.updated = (results.updated || 0) + 1;
+
+          // Find supplier from Excel data for import receipt
+          let supplierIdForImport = null;
+          if (row.primarySupplier || row.supplier) {
+            const supplierName = row.primarySupplier || row.supplier;
+            console.log(`🔍 Looking for supplier for import receipt: ${supplierName}`);
+
+            const supplier = await Supplier.findOne({
+              name: { $regex: new RegExp(supplierName, "i") },
+              status: "cooperation",
+              deletedAt: null,
+            }).lean();
+
+            if (supplier) {
+              supplierIdForImport = supplier._id;
+              console.log(`✅ Found supplier for import receipt: ${supplier.name} (${supplier._id})`);
             } else {
-              await Product.updateOne({ _id: existingProduct._id }, updateOps);
-              results.updated = (results.updated || 0) + 1;
+              console.log(`⚠️ Supplier not found for import receipt: ${supplierName}`);
             }
-          } catch (updErr) {
-            console.error(
-              `Update failed for SKU ${skuVal} (row ${rowNumber}):`,
-              updErr
-            );
-            results.errors.push({
-              row: rowNumber,
-              message: updErr.message || "Update error",
-            });
-            results.failed++;
           }
 
-          // skip tạo mới
-          continue;
-        }
+          // Always track product for import receipt (even if product exists)
+          // This ensures every import creates a receipt entry
+          const importedProduct = {
+            productId: existingProduct._id,
+            productName: row.name || existingProduct.name || "Unknown Product",
+            productSku: skuVal,
+            quantity: parseInt(row.quantity) || 0,
+            unitPrice: parseFloat(row.basePrice) || existingProduct.basePrice || 0,
+            supplierId: supplierIdForImport,
+            categoryId: categoryIdForRow || existingProduct.categoryId,
+            excelRowData: {
+              name: row.name,
+              sku: skuVal,
+              quantity: row.quantity,
+              basePrice: row.basePrice,
+              description: row.description,
+              category: row.category,
+              supplier: row.primarySupplier || row.supplier,
+              isUpdate: true,
+            },
+          };
 
-        // validate unit
-        const unit = row.unit ? row.unit.toLowerCase() : "pcs";
-        if (row.unit && !validUnits.includes(unit)) {
-          results.errors.push({
-            row: rowNumber,
-            message: `Invalid unit "${row.unit}". Valid: ${validUnits.join(
-              ", "
-            )}`,
-          });
-          results.failed++;
-          continue;
-        }
+          importedProducts.push(importedProduct);
+          console.log(`✅ Tracked EXISTING product for import receipt: ${row.name} (${skuVal})`);
+        } else {
+          // Create new product
+          const primarySupplierId = null;
+          let resolvedPrimarySupplierId = null;
 
-        // category lookup
-        let categoryId = null;
-        if (row.category) {
-          categoryId = categoryMap.get(String(row.category).toLowerCase());
-          if (!categoryId) {
+          // Find supplier from Excel data
+          if (row.primarySupplier || row.supplier) {
+            const supplierName = row.primarySupplier || row.supplier;
+            console.log(`🔍 Looking for supplier: ${supplierName}`);
+
+            const supplier = await Supplier.findOne({
+              name: { $regex: new RegExp(supplierName, "i") },
+              status: "cooperation",
+              deletedAt: null,
+            }).lean();
+
+            if (supplier) {
+              resolvedPrimarySupplierId = supplier._id;
+              console.log(`✅ Found supplier: ${supplier.name} (${supplier._id})`);
+            } else {
+              console.log(`⚠️ Supplier not found: ${supplierName}`);
+            }
+          }
+
+          const productData = {
+            name: String(row.name).trim(),
+            sku: skuVal,
+            description: row.description || "",
+            unit: row.unit || "pcs",
+            basePrice: parseFloat(row.basePrice) || 0,
+            minStockLevel: parseInt(row.minStockLevel) || 0,
+            quantity: parseInt(row.quantity) || 0,
+            warehouseId,
+            categoryId: categoryIdForRow, // <-- ensure categoryId present
+            primarySupplierId: resolvedPrimarySupplierId,
+            status: "in stock",
+            createdBy: req.user.sub,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+
+          // If categoryId still null and schema requires it, we should throw or mark as failed.
+          // But we attempted to create fallback 'Uncategorized' above; if still null, mark row failed.
+          if (!productData.categoryId) {
             results.errors.push({
               row: rowNumber,
-              message: `Category "${row.category}" not found`,
+              message: "Category could not be resolved or created; product not created",
             });
             results.failed++;
+            console.warn(`Skipping creation for SKU ${skuVal} due to missing categoryId`);
             continue;
           }
-        }
 
-        // supplier lookup
-        let primarySupplierId = null;
-        if (row.primarySupplier) {
-          primarySupplierId = supplierMap.get(
-            String(row.primarySupplier).toLowerCase()
-          );
-          if (!primarySupplierId) {
-            results.errors.push({
-              row: rowNumber,
-              message: `Supplier "${row.primarySupplier}" not found`,
-            });
-            results.failed++;
-            continue;
-          }
-        }
-
-        // prepare product doc
-        const productData = {
-          name: String(row.name).trim(),
-          sku: skuVal,
-          description: row.description ? String(row.description).trim() : "",
-          unit,
-          basePrice: parseFloat(row.basePrice) || 0,
-          minStockLevel: parseInt(row.minStockLevel) || 0,
-          quantity: parseInt(row.quantity) || 0,
-          warehouseId,
-          categoryId,
-          primarySupplierId,
-          status: "in stock",
-          createdBy: req.user.sub,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-
-        const product = new Product(productData);
-        try {
+          const product = new Product(productData);
           await product.save();
           results.successful++;
-        } catch (saveErr) {
-          if (saveErr && saveErr.code === 11000) {
-            results.errors.push({
-              row: rowNumber,
-              message: `Duplicate SKU "${skuVal}" in this warehouse (DB constraint)`,
-            });
-          } else {
-            results.errors.push({
-              row: rowNumber,
-              message: saveErr.message || "Save error",
-            });
-          }
-          results.failed++;
+
+          // Track new product for receipt
+          const importedProduct = {
+            productId: product._id,
+            productName: row.name || "Unknown Product",
+            productSku: skuVal,
+            quantity: parseInt(row.quantity) || 0,
+            unitPrice: parseFloat(row.basePrice) || 0,
+            supplierId: resolvedPrimarySupplierId,
+            categoryId: productData.categoryId,
+            excelRowData: {
+              name: row.name,
+              sku: skuVal,
+              quantity: row.quantity,
+              basePrice: row.basePrice,
+              description: row.description,
+              category: row.category,
+              supplier: row.primarySupplier || row.supplier,
+            },
+          };
+
+          importedProducts.push(importedProduct);
+          console.log(`✅ Tracked NEW product: ${row.name} (${skuVal})`);
         }
       } catch (rowErr) {
         console.error(`Error processing row ${rowNumber}:`, rowErr);
@@ -284,42 +353,184 @@ exports.importProducts = async (req, res) => {
         });
         results.failed++;
       }
+    } // end for rows
+
+    console.log("📊 Import Summary (before receipt):", {
+      total: results.total,
+      successful: results.successful,
+      updated: results.updated,
+      failed: results.failed,
+      importedProductsCount: importedProducts.length,
+    });
+
+    // ===== ALWAYS CREATE IMPORT RECEIPT (if we have items with qty > 0) =====
+    console.log("🚀 FORCE Creating ImportReceipt...");
+    let importReceiptId = null;
+
+    try {
+      // If no products tracked but Excel had rows, create dummy entries from Excel data
+      if (importedProducts.length === 0 && data && data.length > 0) {
+        console.log(`🔧 Creating receipt entries from ${data.length} Excel rows`);
+
+        for (let index = 0; index < data.length; index++) {
+          const row = data[index];
+          if (row.name && row.sku) {
+            // Resolve supplier for dummy
+            let supplierIdForDummy = null;
+            if (row.primarySupplier || row.supplier) {
+              const supplierName = row.primarySupplier || row.supplier;
+              const supplier = await Supplier.findOne({
+                name: { $regex: new RegExp(supplierName, "i") },
+                status: "cooperation",
+                deletedAt: null,
+              }).lean();
+
+              if (supplier) {
+                supplierIdForDummy = supplier._id;
+              }
+            }
+
+            // Resolve categoryId for dummy (reuse logic above lightly)
+            let categoryIdForDummy = null;
+            const categoryNameRaw = row.category ? String(row.category).trim() : "";
+            if (categoryNameRaw) {
+              const foundCat = await Category.findOne({
+                name: { $regex: new RegExp(`^${categoryNameRaw}$`, "i") },
+                status: "active",
+                deletedAt: null,
+              }).lean();
+              if (foundCat) categoryIdForDummy = foundCat._id;
+            } else {
+              const unc = await Category.findOne({
+                name: { $regex: /^uncategorized$/i },
+                status: "active",
+                deletedAt: null,
+              }).lean();
+              if (unc) categoryIdForDummy = unc._id;
+            }
+
+            const dummyProduct = {
+              productId: new mongoose.Types.ObjectId(),
+              productName: row.name || `Product ${index + 1}`,
+              productSku: String(row.sku).toUpperCase().trim(),
+              quantity: parseInt(row.quantity) || 0,
+              unitPrice: parseFloat(row.basePrice) || 0,
+              supplierId: supplierIdForDummy,
+              categoryId: categoryIdForDummy,
+              excelRowData: {
+                name: row.name,
+                sku: row.sku,
+                quantity: row.quantity,
+                basePrice: row.basePrice,
+                description: row.description,
+                category: row.category,
+                supplier: row.primarySupplier || row.supplier,
+                isDuplicate: true,
+              },
+            };
+            importedProducts.push(dummyProduct);
+          }
+        }
+
+        console.log(`✅ Created ${importedProducts.length} receipt entries (dummy)`);
+      }
+
+      // Filter items with quantity > 0 for totalAmount & details
+      const validItems = importedProducts.filter((it) => (parseInt(it.quantity) || 0) > 0);
+
+      if (validItems.length > 0) {
+        const receiptNumber = await generateImportReceiptNumber();
+        const totalAmount = validItems.reduce((sum, item) => {
+          return sum + (parseInt(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+        }, 0);
+
+        console.log("🔍 Creating ImportReceipt:", {
+          receiptNumber,
+          totalAmount,
+          itemsCount: validItems.length,
+        });
+
+        const importReceiptData = {
+          receiptNumber,
+          warehouseId,
+          createdByStaff: req.user.sub,
+          details: validItems.map((item) => ({
+            productId: item.productId,
+            quantity: parseInt(item.quantity) || 0,
+            unitPrice: parseFloat(item.unitPrice) || 0,
+            productName: item.productName,
+            productSku: item.productSku,
+            totalPrice: (parseInt(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0),
+            supplierId: item.supplierId,
+            supplierName: item.excelRowData?.supplier || "Unknown Supplier",
+            categoryId: item.categoryId || null,
+          })),
+          totalAmount,
+          notes: `Auto-generated from Excel import. ${results.successful || 0} new products created, ${results.updated || 0} products updated. Total processed: ${importedProducts.length} items.`,
+          status: "created",
+          importMetadata: {
+            fileName: req.file ? req.file.originalname : "unknown.xlsx",
+            importDate: new Date(),
+            totalRows: results.total,
+            successfulRows: results.successful,
+            failedRows: results.failed,
+            updatedRows: results.updated || 0,
+            newProductsCreated: results.successful || 0,
+            existingProductsUpdated: results.updated || 0,
+            importedBy: req.user.sub,
+          },
+        };
+
+        const importReceipt = new ImportReceipt(importReceiptData);
+        await importReceipt.save();
+        importReceiptId = importReceipt._id;
+
+        console.log(`✅ SUCCESS! Created ImportReceipt ${receiptNumber} with ID: ${importReceiptId}`);
+      } else {
+        console.log("⚠️ No valid items (quantity > 0) to create receipt for");
+      }
+    } catch (receiptError) {
+      console.error("❌ Failed to create ImportReceipt:", receiptError);
+      console.error("❌ Receipt error stack:", receiptError.stack);
     }
 
-    // cleanup uploaded file
+    // Cleanup uploaded file
     try {
-      if (uploadedPath && fsSync.existsSync(uploadedPath))
-        await fs.unlink(uploadedPath);
+      if (uploadedPath && fsSync.existsSync(uploadedPath)) await fs.unlink(uploadedPath);
     } catch (unlinkErr) {
       console.error("Failed to remove uploaded file:", unlinkErr);
     }
 
+    console.log("🎉 Import completed successfully!", {
+      importReceiptId,
+      ...results,
+    });
+
     return res.json({
       success: true,
-      message: `Import completed. ${results.successful} products imported successfully, ${results.failed} failed.`,
+      message: `Import completed. ${results.successful} new products, ${results.updated} updated, ${results.failed} failed.`,
+      importReceiptId,
       ...results,
     });
   } catch (error) {
     console.error("Import error:", error && error.stack ? error.stack : error);
 
-    // cleanup on global error
+    // Cleanup on global error
     try {
-      if (uploadedPath && fsSync.existsSync(uploadedPath))
-        await fs.unlink(uploadedPath);
+      if (uploadedPath && fsSync.existsSync(uploadedPath)) await fs.unlink(uploadedPath);
     } catch (e) {
       console.error("Failed cleanup after error:", e);
     }
 
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to import products",
-        error: error.message || "Internal server error",
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to import products",
+      error: error.message || "Internal server error",
+    });
   }
 };
-// (Optional) keep your template generator function below if present in the same file
+
+// Generate Excel template
 exports.generateTemplate = async (req, res) => {
   try {
     const categories = await Category.find({
@@ -337,28 +548,26 @@ exports.generateTemplate = async (req, res) => {
         sku: "SP001",
         description: "This is a sample product description",
         unit: "pcs",
-        basePrice: 10.5,
+        basePrice: 10.5, // USD price
         quantity: 100,
         category: categories.length > 0 ? categories[0].name : "Electronics",
-        primarySupplier:
-          suppliers.length > 0 ? suppliers[0].name : "Sample Supplier",
-        minStockLevel: 10,
+        primarySupplier: suppliers.length > 0 ? suppliers[0].name : "Sample Supplier",
+      },
+      {
+        name: "Sample Product 2",
+        sku: "SP002",
+        description: "Another sample product",
+        unit: "box",
+        basePrice: 25.75,
+        quantity: 50,
+        category: categories.length > 0 ? categories[0].name : "Office Supplies",
+        primarySupplier: suppliers.length > 0 ? suppliers[0].name : "Sample Supplier",
       },
     ];
 
-    const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(sampleData);
+    const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
-
-    const categoriesSheet = XLSX.utils.json_to_sheet(
-      categories.map((cat) => ({ name: cat.name }))
-    );
-    XLSX.utils.book_append_sheet(workbook, categoriesSheet, "Categories");
-
-    const suppliersSheet = XLSX.utils.json_to_sheet(
-      suppliers.map((sup) => ({ name: sup.name }))
-    );
-    XLSX.utils.book_append_sheet(workbook, suppliersSheet, "Suppliers");
 
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
@@ -366,10 +575,7 @@ exports.generateTemplate = async (req, res) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=product_import_template.xlsx"
-    );
+    res.setHeader("Content-Disposition", "attachment; filename=product_import_template.xlsx");
     res.setHeader("Content-Length", buffer.length);
 
     res.send(buffer);

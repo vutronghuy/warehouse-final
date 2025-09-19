@@ -12,7 +12,7 @@ const ImportReceiptSchema = new Schema(
     supplierId: {
       type: Schema.Types.ObjectId,
       ref: "Supplier",
-      required: true
+      required: false // Made optional for auto-generated import receipts
     },
     warehouseId: {
       type: Schema.Types.ObjectId,
@@ -27,30 +27,9 @@ const ImportReceiptSchema = new Schema(
       required: true
     },
 
-    // Manager review
-    managerReview: {
-      reviewedBy: { type: Schema.Types.ObjectId, ref: "User" },
-      reviewedAt: { type: Date },
-      comment:    { type: String, trim: true }
-    },
-
-    // Admin nhỏ duyệt (chỉ admin quản lý warehouse này mới có thể duyệt)
-    adminApproval: {
-      approvedBy: { type: Schema.Types.ObjectId, ref: "User" },
-      approvedAt: { type: Date },
-      comment:    { type: String, trim: true }
-    },
-
-    // Accounter xác nhận (chỉ accounter của warehouse này mới có thể xác nhận)
-    accounterConfirmation: {
-      confirmedBy: { type: Schema.Types.ObjectId, ref: "User" },
-      confirmedAt: { type: Date },
-      comment:    { type: String, trim: true }
-    },
-
     status: {
       type: String,
-      enum: ["created", "reviewed", "approved", "confirmed", "rejected"],
+      enum: ["created"],
       default: "created"
     },
 
@@ -59,7 +38,14 @@ const ImportReceiptSchema = new Schema(
       {
         productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
         quantity:  { type: Number, required: true, min: 1 },
-        unitPrice: { type: Number, min: 0 }
+        unitPrice: { type: Number, min: 0 },
+        // Additional fields from Excel import
+        productName: { type: String },
+        productSku: { type: String },
+        totalPrice: { type: Number, min: 0 },
+        // Supplier information from Excel
+        supplierId: { type: Schema.Types.ObjectId, ref: "Supplier", required: false },
+        supplierName: { type: String }
       }
     ],
 
@@ -71,6 +57,16 @@ const ImportReceiptSchema = new Schema(
     notes: {
       type: String,
       trim: true
+    },
+
+    // Import metadata from Excel
+    importMetadata: {
+      fileName: { type: String },
+      importDate: { type: Date },
+      totalRows: { type: Number },
+      successfulRows: { type: Number },
+      failedRows: { type: Number },
+      importedBy: { type: Schema.Types.ObjectId, ref: "User" }
     },
 
     updatedBy: {
