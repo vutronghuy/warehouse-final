@@ -20,6 +20,17 @@
           <p class="text-sm text-red-600">{{ errorMessage }}</p>
         </div>
 
+        <!-- Validation Errors -->
+        <div v-if="validationErrors.length > 0" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+          <h4 class="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</h4>
+          <ul class="text-sm text-red-600 space-y-1">
+            <li v-for="error in validationErrors" :key="error" class="flex items-center">
+              <span class="w-1 h-1 bg-red-500 rounded-full mr-2"></span>
+              {{ error }}
+            </li>
+          </ul>
+        </div>
+
         <!-- Form -->
         <form @submit.prevent="handleSubmit" class="space-y-6">
           <!-- Basic Information -->
@@ -30,11 +41,17 @@
               </label>
               <input
                 v-model="form.name"
+                @blur="validateField('name')"
+                @input="clearFieldError('name')"
                 type="text"
                 required
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                :class="[
+                  'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                  fieldErrors.name ? 'border-red-500' : 'border-gray-300'
+                ]"
                 placeholder="Enter product name"
               />
+              <p v-if="fieldErrors.name" class="mt-1 text-sm text-red-600">{{ fieldErrors.name }}</p>
             </div>
 
             <div>
@@ -43,12 +60,21 @@
               </label>
               <input
                 v-model="form.sku"
+                @blur="validateField('sku')"
+                @input="clearFieldError('sku')"
                 type="text"
                 required
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                :class="[
+                  'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                  fieldErrors.sku ? 'border-red-500' : 'border-gray-300'
+                ]"
                 placeholder="Enter SKU (e.g., PROD001)"
                 style="text-transform: uppercase"
               />
+              <p v-if="fieldErrors.sku" class="mt-1 text-sm text-red-600">{{ fieldErrors.sku }}</p>
+              <p v-if="form.sku && !fieldErrors.sku" class="mt-1 text-xs text-gray-500">
+                SKU will be normalized to uppercase and checked for uniqueness
+              </p>
             </div>
           </div>
 
@@ -65,7 +91,7 @@
           <!-- Product Details -->
           <div class="border-t pt-6">
             <h4 class="text-md font-medium text-gray-900 mb-4">Product Details</h4>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -73,8 +99,13 @@
                 </label>
                 <select
                   v-model="form.unit"
+                  @blur="validateField('unit')"
+                  @change="clearFieldError('unit')"
                   required
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  :class="[
+                    'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                    fieldErrors.unit ? 'border-red-500' : 'border-gray-300'
+                  ]"
                 >
                   <option value="">Select unit</option>
                   <option value="pcs">Pieces (pcs)</option>
@@ -83,29 +114,48 @@
                   <option value="box">Box</option>
                   <option value="pack">Pack</option>
                 </select>
+                <p v-if="fieldErrors.unit" class="mt-1 text-sm text-red-600">{{ fieldErrors.unit }}</p>
               </div>
 
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">Base Price</label>
                 <input
                   v-model.number="form.basePrice"
+                  @blur="validateField('basePrice')"
+                  @input="clearFieldError('basePrice')"
                   type="number"
                   min="0"
                   step="0.01"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  :class="[
+                    'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                    fieldErrors.basePrice ? 'border-red-500' : 'border-gray-300'
+                  ]"
                   placeholder="0.00"
                 />
+                <p v-if="fieldErrors.basePrice" class="mt-1 text-sm text-red-600">{{ fieldErrors.basePrice }}</p>
+                <p v-if="form.basePrice && !fieldErrors.basePrice" class="mt-1 text-xs text-gray-500">
+                  Must be ≥ 0 (validated on server)
+                </p>
               </div>
 
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">Min Stock Level</label>
                 <input
                   v-model.number="form.minStockLevel"
+                  @blur="validateField('minStockLevel')"
+                  @input="clearFieldError('minStockLevel')"
                   type="number"
                   min="0"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  :class="[
+                    'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                    fieldErrors.minStockLevel ? 'border-red-500' : 'border-gray-300'
+                  ]"
                   placeholder="0"
                 />
+                <p v-if="fieldErrors.minStockLevel" class="mt-1 text-sm text-red-600">{{ fieldErrors.minStockLevel }}</p>
+                <p v-if="form.minStockLevel && !fieldErrors.minStockLevel" class="mt-1 text-xs text-gray-500">
+                  Must be ≥ 0 (validated on server)
+                </p>
               </div>
 
               <div>
@@ -122,7 +172,7 @@
           <!-- Category and Supplier -->
           <div class="border-t pt-6">
             <h4 class="text-md font-medium text-gray-900 mb-4">Category & Supplier</h4>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -130,14 +180,23 @@
                 </label>
                 <select
                   v-model="form.categoryId"
+                  @blur="validateField('categoryId')"
+                  @change="clearFieldError('categoryId')"
                   required
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  :class="[
+                    'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                    fieldErrors.categoryId ? 'border-red-500' : 'border-gray-300'
+                  ]"
                 >
                   <option value="">Select category</option>
                   <option v-for="category in categories" :key="category._id" :value="category._id">
                     {{ category.name }}
                   </option>
                 </select>
+                <p v-if="fieldErrors.categoryId" class="mt-1 text-sm text-red-600">{{ fieldErrors.categoryId }}</p>
+                <p v-if="form.categoryId && !fieldErrors.categoryId" class="mt-1 text-xs text-gray-500">
+                  Category existence and permissions verified on server
+                </p>
               </div>
 
               <div>
@@ -146,14 +205,23 @@
                 </label>
                 <select
                   v-model="form.primarySupplierId"
+                  @blur="validateField('primarySupplierId')"
+                  @change="clearFieldError('primarySupplierId')"
                   required
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  :class="[
+                    'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                    fieldErrors.primarySupplierId ? 'border-red-500' : 'border-gray-300'
+                  ]"
                 >
                   <option value="">Select supplier</option>
                   <option v-for="supplier in suppliers" :key="supplier._id" :value="supplier._id">
                     {{ supplier.name }}
                   </option>
                 </select>
+                <p v-if="fieldErrors.primarySupplierId" class="mt-1 text-sm text-red-600">{{ fieldErrors.primarySupplierId }}</p>
+                <p v-if="form.primarySupplierId && !fieldErrors.primarySupplierId" class="mt-1 text-xs text-gray-500">
+                  Supplier existence and permissions verified on server
+                </p>
               </div>
             </div>
           </div>
@@ -197,6 +265,8 @@ export default {
     return {
       isLoading: false,
       errorMessage: '',
+      validationErrors: [],
+      fieldErrors: {},
       categories: [],
       suppliers: [],
       form: {
@@ -219,12 +289,18 @@ export default {
       }
     },
     'form.name'(newName) {
-      // Auto-generate SKU from name
+      // Auto-generate SKU from name (Frontend UX only)
       if (newName && !this.form.sku) {
         this.form.sku = newName
           .toUpperCase()
           .replace(/[^A-Z0-9]/g, '')
           .substring(0, 10);
+      }
+    },
+    'form.sku'(newSku) {
+      // Normalize SKU to uppercase (Frontend UX)
+      if (newSku) {
+        this.form.sku = newSku.toUpperCase();
       }
     }
   },
@@ -246,6 +322,8 @@ export default {
         primarySupplierId: ''
       };
       this.errorMessage = '';
+      this.validationErrors = [];
+      this.fieldErrors = {};
     },
     async loadDropdownData() {
       try {
@@ -266,9 +344,101 @@ export default {
         console.error('Error loading dropdown data:', error);
       }
     },
+
+    // Frontend validation methods
+    validateField(fieldName) {
+      this.clearFieldError(fieldName);
+
+      switch (fieldName) {
+        case 'name':
+          if (!this.form.name.trim()) {
+            this.fieldErrors.name = 'Product name is required';
+          }
+          break;
+
+        case 'sku':
+          if (!this.form.sku.trim()) {
+            this.fieldErrors.sku = 'SKU is required';
+          } else if (this.form.sku.length < 2) {
+            this.fieldErrors.sku = 'SKU must be at least 2 characters';
+          }
+          break;
+
+        case 'unit':
+          if (!this.form.unit) {
+            this.fieldErrors.unit = 'Unit is required';
+          }
+          break;
+
+        case 'basePrice':
+          if (this.form.basePrice < 0) {
+            this.fieldErrors.basePrice = 'Base price must be ≥ 0';
+          } else if (isNaN(this.form.basePrice)) {
+            this.fieldErrors.basePrice = 'Base price must be a valid number';
+          }
+          break;
+
+        case 'minStockLevel':
+          if (this.form.minStockLevel < 0) {
+            this.fieldErrors.minStockLevel = 'Min stock level must be ≥ 0';
+          } else if (isNaN(this.form.minStockLevel)) {
+            this.fieldErrors.minStockLevel = 'Min stock level must be a valid number';
+          }
+          break;
+
+        case 'categoryId':
+          if (!this.form.categoryId) {
+            this.fieldErrors.categoryId = 'Category is required';
+          }
+          break;
+
+        case 'primarySupplierId':
+          if (!this.form.primarySupplierId) {
+            this.fieldErrors.primarySupplierId = 'Primary supplier is required';
+          }
+          break;
+      }
+    },
+
+    clearFieldError(fieldName) {
+      if (this.fieldErrors[fieldName]) {
+        this.$delete(this.fieldErrors, fieldName);
+      }
+    },
+
+    validateForm() {
+      this.validationErrors = [];
+      this.fieldErrors = {};
+
+      // Validate all required fields
+      const requiredFields = ['name', 'sku', 'unit', 'categoryId', 'primarySupplierId'];
+      requiredFields.forEach(field => {
+        this.validateField(field);
+      });
+
+      // Validate numeric fields
+      this.validateField('basePrice');
+      this.validateField('minStockLevel');
+
+      // Check if any field has errors
+      const hasFieldErrors = Object.keys(this.fieldErrors).length > 0;
+
+      if (hasFieldErrors) {
+        this.validationErrors.push('Please fix the highlighted fields above');
+        return false;
+      }
+
+      return true;
+    },
     async handleSubmit() {
+      // Frontend validation first (UX)
+      if (!this.validateForm()) {
+        return;
+      }
+
       this.isLoading = true;
       this.errorMessage = '';
+      this.validationErrors = [];
 
       try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -276,7 +446,13 @@ export default {
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await axios.post('/api/products', this.form);
+        // Prepare data for backend (normalize SKU)
+        const formData = {
+          ...this.form,
+          sku: this.form.sku.toUpperCase().trim()
+        };
+
+        const response = await axios.post('/api/products', formData);
 
         if (response.data.success) {
           this.$emit('created', response.data.product);
@@ -284,7 +460,15 @@ export default {
         }
       } catch (error) {
         console.error('Error creating product:', error);
-        this.errorMessage = error.response?.data?.message || 'Failed to create product. Please try again.';
+
+        // Handle server validation errors
+        if (error.response?.data?.errors) {
+          this.validationErrors = error.response.data.errors;
+        } else if (error.response?.data?.message) {
+          this.errorMessage = error.response.data.message;
+        } else {
+          this.errorMessage = 'Failed to create product. Please try again.';
+        }
       } finally {
         this.isLoading = false;
       }

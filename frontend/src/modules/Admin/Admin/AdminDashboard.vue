@@ -6,7 +6,7 @@
       <!-- Header Stats (Customers + Orders) -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <!-- Customers Card -->
-        <div class="bg-white rounded-xl shadow-sm border p-6">
+        <div class="bg-white rounded-xl shadow-sm border p- 6">
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center">
               <div class="bg-gray-100 rounded-lg p-2 mr-3">
@@ -324,6 +324,9 @@
       </div>
       <!-- end grid -->
     </div>
+
+    <!-- ChatBot Component -->
+    <ChatBot />
   </div>
 </template>
 
@@ -333,6 +336,7 @@ import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios';
 import Sidebar from './sidebar.vue';
 import Header from './headbar.vue';
+import { ChatBot } from '@/components';
 import Chart from 'chart.js/auto'; // npm i chart.js
 import socketService from '@/services/socketService';
 

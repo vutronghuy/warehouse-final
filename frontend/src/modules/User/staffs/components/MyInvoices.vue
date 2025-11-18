@@ -63,7 +63,7 @@
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="invoice in props.myInvoices" :key="invoice._id">
+          <tr v-for="invoice in localInvoices" :key="invoice._id">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
               {{ invoice.invoiceNumber }}
             </td>
@@ -118,8 +118,8 @@
       <div class="flex items-center justify-between">
         <div class="text-sm text-gray-700">
           Showing {{ (pagination.currentPage - 1) * 8 + 1 }} to
-          {{ Math.min(pagination.currentPage * 8, pagination.totalInvoices) }} of
-          {{ pagination.totalInvoices }} results
+          {{ Math.min(pagination.currentPage * 8, pagination.totalItems) }} of
+          {{ pagination.totalItems }} results
         </div>
         <div class="flex items-center space-x-4">
           <span class="text-sm text-gray-700">
@@ -128,14 +128,14 @@
           <div class="flex space-x-2">
             <button
               @click="changePage(pagination.currentPage - 1)"
-              :disabled="!pagination.hasPrev"
+              :disabled="pagination.currentPage <= 1"
               class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
               @click="changePage(pagination.currentPage + 1)"
-              :disabled="!pagination.hasNext"
+              :disabled="pagination.currentPage >= pagination.totalPages"
               class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
@@ -146,7 +146,7 @@
     </div>
 
     <!-- Empty State -->
-    <div v-if="myInvoices.length === 0 && !isLoading" class="text-center py-8">
+    <div v-if="localInvoices.length === 0 && !isLoading" class="text-center py-8">
       <p class="text-gray-500">No invoices created yet</p>
     </div>
 
@@ -159,11 +159,11 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 
 // Props
-const props = defineProps({
+defineProps({
   myInvoices: {
     type: Array,
-    default: () => []
-  }
+    default: () => [],
+  },
 });
 
 // Emits
@@ -176,6 +176,7 @@ const isLoading = ref(false);
 const pagination = ref(null);
 const currentPage = ref(1);
 const searchTimeout = ref(null);
+const localInvoices = ref([]);
 
 // Methods
 const debounceSearch = () => {
@@ -201,9 +202,12 @@ const resetFilters = () => {
 };
 
 const changePage = (page) => {
+  console.log('changePage called with:', page);
+  console.log('Current pagination:', pagination.value);
   if (!pagination.value) return;
   if (page >= 1 && page <= pagination.value.totalPages) {
     currentPage.value = page;
+    console.log('Changing to page:', page);
     loadMyInvoices();
   }
 };
@@ -273,7 +277,9 @@ const loadMyInvoices = async () => {
     const response = await axios.get('/api/invoices', { params });
     if (response.data?.success) {
       const invoices = response.data.invoices || [];
+      localInvoices.value = invoices;
       pagination.value = response.data.pagination;
+      console.log('Pagination data:', response.data.pagination);
       emit('invoices-loaded', invoices);
     }
   } catch (error) {

@@ -90,7 +90,51 @@ exports.getCustomerById = async (req, res, next) => {
 // Create new customer
 exports.createCustomer = async (req, res, next) => {
   try {
-    const customerData = req.body;
+    const { name, phone, address, email, status, notes } = req.body;
+
+    // Validate required fields
+    if (!name || !phone || !address) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: name, phone, address"
+      });
+    }
+
+    // Validate status enum
+    if (status && !['active', 'inactive'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be 'active' or 'inactive'"
+      });
+    }
+
+    // Validate email format if provided
+    if (email && email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid email format"
+        });
+      }
+    }
+
+    // Sanitize and normalize data
+    const customerData = {
+      name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      status: status || 'active',
+      createdBy: req.user.sub
+    };
+
+    // Add optional fields with sanitization
+    if (email && email.trim()) {
+      customerData.email = email.trim().toLowerCase();
+    }
+    if (notes && notes.trim()) {
+      customerData.notes = notes.trim();
+    }
 
     // Check if phone already exists
     const existingPhone = await Customer.findOne({
@@ -103,9 +147,6 @@ exports.createCustomer = async (req, res, next) => {
         message: "Phone number already exists",
       });
     }
-
-    // Add createdBy from authenticated user
-    customerData.createdBy = req.user.sub;
 
     // Create new customer
     const customer = new Customer(customerData);

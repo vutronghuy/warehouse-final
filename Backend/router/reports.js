@@ -3,13 +3,40 @@ const express = require('express');
 const router = express.Router();
 const reportsController = require('../controller/ReportController');
 const { verifyToken } = require('../middlewares/auth');
+const User = require('../models/User');
 
 // Optional: middleware to restrict to accounter/admin roles
-const requireAccounterOrAdmin = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ ok: false, message: 'Unauthorized' });
-  const allowed = ['accounter', 'admin'];
-  if (req.user.isSuperAdmin || allowed.includes(req.user.role)) return next();
-  return res.status(403).json({ ok: false, message: 'Access denied' });
+const requireAccounterOrAdmin = async (req, res, next) => {
+  try {
+    if (!req.user) return res.status(401).json({ ok: false, message: 'Unauthorized' });
+    const allowed = ['accounter', 'admin'];
+    if (!req.user.isSuperAdmin && !allowed.includes(req.user.role)) {
+      return res.status(403).json({ ok: false, message: 'Access denied' });
+    }
+
+    if (req.user.isSuperAdmin || req.user.role === 'admin') {
+      return next();
+    }
+
+    // Accounter must be scoped to their warehouse
+    let warehouseId = req.user.warehouseId;
+    if (!warehouseId) {
+      const userDoc = await User.findById(req.user.sub).select('accounter.warehouseId').lean();
+      warehouseId = userDoc?.accounter?.warehouseId?.toString() || null;
+    }
+
+    if (!warehouseId) {
+      return res.status(403).json({ ok: false, message: 'Accounter is not assigned to any warehouse.' });
+    }
+
+    req.user.warehouseId = warehouseId;
+    req.query.warehouse = warehouseId;
+    req.accounterWarehouseId = warehouseId;
+    return next();
+  } catch (error) {
+    console.error('requireAccounterOrAdmin error:', error);
+    return res.status(500).json({ ok: false, message: 'Internal server error' });
+  }
 };
 
 // GET /api/reports/accounting

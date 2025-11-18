@@ -698,27 +698,32 @@ exports.getInventoryValue = async (req, res, next) => {
 // Get cash flow time series data
 exports.getCashFlowTimeSeries = async (req, res, next) => {
   try {
-    const { period = 'month', year = 2025, month = 1 } = req.query;
+    const {
+      period = 'month',
+      year = 2025,
+      month = 1,
+      warehouse
+    } = req.query;
+
+    const normalizedYear = parseInt(year, 10) || new Date().getFullYear();
+    const normalizedMonth = parseInt(month, 10) || 1;
 
     let startDate, endDate, groupBy;
 
     if (period === 'year') {
-      // Get data for 5 years
-      startDate = new Date(year - 4, 0, 1);
-      endDate = new Date(parseInt(year) + 1, 0, 1);
+      startDate = new Date(normalizedYear - 4, 0, 1);
+      endDate = new Date(normalizedYear + 1, 0, 1);
       groupBy = { year: { $year: '$createdAt' } };
     } else if (period === 'month') {
-      // Get data for 12 months of the specified year
-      startDate = new Date(year, 0, 1);
-      endDate = new Date(parseInt(year) + 1, 0, 1);
+      startDate = new Date(normalizedYear, 0, 1);
+      endDate = new Date(normalizedYear + 1, 0, 1);
       groupBy = {
         year: { $year: '$createdAt' },
         month: { $month: '$createdAt' }
       };
     } else if (period === 'day') {
-      // Get data for days in the specified month
-      startDate = new Date(year, month - 1, 1);
-      endDate = new Date(year, month, 1);
+      startDate = new Date(normalizedYear, normalizedMonth - 1, 1);
+      endDate = new Date(normalizedYear, normalizedMonth, 1);
       groupBy = {
         year: { $year: '$createdAt' },
         month: { $month: '$createdAt' },
@@ -726,39 +731,49 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       };
     }
 
-    // Get revenue data from invoices (xuất hàng) - use finalAmount instead of details calculation
+    let warehouseObjectId = null;
+    if (warehouse) {
+      if (!mongoose.Types.ObjectId.isValid(String(warehouse))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid warehouse id.'
+        });
+      }
+      warehouseObjectId = new mongoose.Types.ObjectId(String(warehouse));
+    }
+
+    const warehouseFilter = warehouseObjectId ? { warehouseId: warehouseObjectId } : {};
+
+    const invoiceMatchBase = {
+      ...warehouseFilter,
+      createdAt: { $gte: startDate, $lt: endDate },
+      status: { $in: ['approved', 'paid'] },
+      deletedAt: null
+    };
+
+    // Revenue data
     const revenueData = await Invoice.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lt: endDate },
-          status: { $in: ['approved', 'paid'] },
-          deletedAt: null
-        }
-      },
+      { $match: invoiceMatchBase },
       {
         $group: {
           _id: groupBy,
-          totalRevenue: {
-            $sum: '$finalAmount' // Use finalAmount directly from invoice
-          }
+          totalRevenue: { $sum: '$finalAmount' }
         }
       },
-      {
-        $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 }
-      }
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
     ]);
 
-    // Compute cost series: if period is 'year', use ImportReceipts of that year; otherwise use invoice item basePrice snapshot
+    // Cost data
     let costData;
     if (period === 'year') {
       const ImportReceiptTS = require('../models/import/ImportReceipt');
+      const importMatch = {
+        ...warehouseFilter,
+        createdAt: { $gte: startDate, $lt: endDate },
+        deletedAt: null
+      };
       costData = await ImportReceiptTS.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startDate, $lt: endDate },
-            deletedAt: null
-          }
-        },
+        { $match: importMatch },
         { $unwind: '$details' },
         {
           $group: {
@@ -777,13 +792,7 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       ]);
     } else {
       costData = await Invoice.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startDate, $lt: endDate },
-            status: { $in: ['approved', 'paid'] },
-            deletedAt: null
-          }
-        },
+        { $match: invoiceMatchBase },
         { $unwind: '$details' },
         {
           $lookup: {
@@ -844,7 +853,7 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
 
     // Generate complete time series
     if (period === 'year') {
-      for (let y = year - 4; y <= year; y++) {
+      for (let y = normalizedYear - 4; y <= normalizedYear; y++) {
         const key = `${y}`;
         timeSeriesData.push({
           label: `Năm ${y}`,
@@ -856,9 +865,9 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       }
     } else if (period === 'month') {
       for (let m = 1; m <= 12; m++) {
-        const key = `${year}-${m}`;
+        const key = `${normalizedYear}-${m}`;
         timeSeriesData.push({
-          label: `Tháng ${m}/${year}`,
+          label: `Tháng ${m}/${normalizedYear}`,
           period: m,
           revenueVND: revenueMap.get(key) || 0,
           costVND: costMap.get(key) || 0,
@@ -866,11 +875,11 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
         });
       }
     } else if (period === 'day') {
-      const daysInMonth = new Date(year, month, 0).getDate();
+      const daysInMonth = new Date(normalizedYear, normalizedMonth, 0).getDate();
       for (let d = 1; d <= daysInMonth; d++) {
-        const key = `${year}-${month}-${d}`;
+        const key = `${normalizedYear}-${normalizedMonth}-${d}`;
         timeSeriesData.push({
-          label: `${d}/${month}/${year}`,
+          label: `${d}/${normalizedMonth}/${normalizedYear}`,
           period: d,
           revenueVND: revenueMap.get(key) || 0,
           costVND: costMap.get(key) || 0,
@@ -884,8 +893,8 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       data: {
         series: timeSeriesData,
         period,
-        year: parseInt(year),
-        month: month ? parseInt(month) : null,
+        year: normalizedYear,
+        month: period === 'day' ? normalizedMonth : null,
         summary: {
           totalRevenue: timeSeriesData.reduce((sum, item) => sum + item.revenueVND, 0),
           totalCost: timeSeriesData.reduce((sum, item) => sum + item.costVND, 0),

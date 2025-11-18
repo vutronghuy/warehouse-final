@@ -2,14 +2,14 @@
   <div class="bg-white shadow-sm border-b border-gray-200">
     <div class="flex justify-between items-center px-8 py-4">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Admin Super Managerment</h1>
+        <h1 class="text-2xl font-bold text-gray-900">Super Admin Management</h1>
         <p class="text-sm text-gray-600">Welcome back, {{ userFullName }}</p>
       </div>
 
       <div class="flex items-center gap-4">
         <!-- Notifications: Low stock -->
         <div class="relative">
-          <button
+          <div
             @click="toggleNotif"
             class="relative p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#6A4C93] focus:ring-opacity-50"
             aria-label="Low stock notifications"
@@ -21,7 +21,7 @@
             >
               {{ unreadLowStockCount }}
             </span>
-          </button>
+          </div>
 
           <!-- Notifications Dropdown -->
           <transition
@@ -36,7 +36,7 @@
               v-if="isNotifOpen"
               class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50"
             >
-              <div class="px-4 py-2 text-sm font-semibold text-gray-700">Thông báo</div>
+              <div class="px-4 py-2 text-sm font-semibold text-gray-700">Notifications</div>
 
               <!-- Real-time Notifications -->
               <div
@@ -44,7 +44,7 @@
                 class="border-b border-gray-100"
               >
                 <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-blue-50">
-                  🔔 Thông báo mới
+                  🔔 New notifications
                 </div>
                 <ul class="max-h-40 overflow-auto">
                   <li
@@ -53,16 +53,21 @@
                     class="px-4 py-3 hover:bg-gray-50 border-l-2 border-blue-200"
                   >
                     <div class="flex items-center justify-between text-sm">
-                      <div class="font-medium text-gray-800 truncate flex-1 cursor-pointer" @click="markNotificationAsRead(notification.id)">{{ notification.title }}</div>
+                      <div
+                        class="font-medium text-gray-800 truncate flex-1 cursor-pointer"
+                        @click="markNotificationAsRead(notification.id)"
+                      >
+                        {{ notification.title }}
+                      </div>
                       <div class="flex items-center gap-2">
                         <span
                           class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 animate-pulse"
-                          >Mới</span
+                          >New</span
                         >
                         <button
                           @click="deleteNotification(notification.id)"
                           class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                          title="Xóa thông báo"
+                          title="Delete notification"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -79,7 +84,7 @@
               <!-- Low Stock Products -->
               <div v-if="lowStockProducts.length > 0" class="border-b border-gray-100">
                 <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-yellow-50">
-                  Cảnh báo tồn kho thấp
+                  Low stock alert
                 </div>
                 <ul class="max-h-40 overflow-auto">
                   <li v-for="p in lowStockProducts" :key="p._id" class="px-4 py-2 hover:bg-gray-50">
@@ -90,7 +95,7 @@
                         <button
                           @click="deleteLowStockProduct(p._id)"
                           class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                          title="Xóa sản phẩm"
+                          title="Delete product"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -107,17 +112,17 @@
                 v-if="!notificationStore.getUnreadNotifications.length && !lowStockProducts.length"
                 class="px-4 py-3 text-sm text-gray-500"
               >
-                Không có thông báo mới
+                No new notifications
               </div>
 
               <div class="px-4 py-2 border-t border-gray-100 flex justify-between">
-                <router-link to="/Superadmin/products" class="text-sm text-[#6A4C93] hover:underline">Xem sản phẩm</router-link>
+                <router-link to="/Superadmin/products" class="text-sm text-[#6A4C93] hover:underline">View products</router-link>
                 <button
                   v-if="notificationStore.unreadCount > 0"
                   @click="markAllNotificationsAsRead"
                   class="text-sm text-gray-600 hover:text-gray-800"
                 >
-                  Đánh dấu tất cả đã đọc
+                  Mark all as read
                 </button>
               </div>
             </div>
@@ -139,7 +144,7 @@
           <!-- User Info -->
           <div class="hidden md:block text-left">
             <div class="text-sm font-medium text-gray-900">{{ userFullName }}</div>
-            <div class="text-xs text-gray-500">Supper Admin</div>
+            <div class="text-xs text-gray-500">Super Admin</div>
           </div>
           <!-- Dropdown Arrow -->
           <svg
@@ -215,6 +220,7 @@ export default {
       lowStockProducts: [],
       isFirstLoad: true, // Track if this is the first load after page reload
       hasViewedNotifications: false, // Track if user has viewed notifications
+      pollTimer: null,
     };
   },
   computed: {
@@ -245,7 +251,7 @@ export default {
         .slice(0, 2);
     },
     unreadLowStockCount() {
-      // Chỉ hiển thị notification count (không cộng dồn với lowStockProducts)
+      // Only show notification count (do not add lowStockProducts)
       return this.notificationStore.unreadCount;
     },
   },
@@ -297,19 +303,19 @@ export default {
       this.notificationStore.deleteNotification(notificationId);
     },
     deleteLowStockProduct(productId) {
-      // Xóa sản phẩm khỏi danh sách low stock
+      // Remove product from low stock list
       this.lowStockProducts = this.lowStockProducts.filter(p => p._id !== productId);
-      // Unread count sẽ tự động cập nhật thông qua computed property
+      // Unread count will update automatically through computed property
     },
     formatTime(timestamp) {
       const now = new Date();
       const time = new Date(timestamp);
       const diffInMinutes = Math.floor((now - time) / (1000 * 60));
 
-      if (diffInMinutes < 1) return 'Vừa xong';
-      if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
-      return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+      if (diffInMinutes < 1) return 'Just now';
+      if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+      return `${Math.floor(diffInMinutes / 1440)} days ago`;
     },
     closeDropdown() {
       this.isDropdownOpen = false;
@@ -347,13 +353,13 @@ export default {
         console.log('Admin Super received low-stock:', data);
         this.notificationStore.addNotification({
           type: 'low_stock',
-          title: '⚠️ Sản phẩm sắp hết hàng',
-          message: `${data.productName} chỉ còn ${data.quantity} sản phẩm`,
+          title: '⚠️ Low Stock Alert',
+          message: `${data.productName} only has ${data.quantity} left`,
           data: data,
         });
       });
 
-      // Nếu Socket.IO không khả dụng, fallback về polling
+      // If Socket.IO not available, fallback to polling
       if (!socket || socketService.isFallbackMode()) {
         console.log('🔄 Socket.IO not available, using polling fallback');
         this.enablePollingFallback();
@@ -361,7 +367,7 @@ export default {
     },
 
     enablePollingFallback() {
-      // Fallback polling mỗi 30 giây
+      // Fallback polling every 30 seconds
       this.pollTimer = setInterval(() => {
         this.fetchLowStockProducts();
       }, 30000);

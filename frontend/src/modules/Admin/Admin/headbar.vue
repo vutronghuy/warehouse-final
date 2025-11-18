@@ -38,14 +38,14 @@
               v-if="isNotifOpen"
               class="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50"
             >
-              <div class="px-4 py-2 text-sm font-semibold text-gray-700">Thông báo</div>
+              <div class="px-4 py-2 text-sm font-semibold text-gray-700">Notifications</div>
 
               <!-- Real-time Notifications -->
               <div
                 v-if="notificationStore.getUnreadNotifications.length > 0"
                 class="border-b border-gray-100"
               >
-                <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-blue-50">🔔 Thông báo mới</div>
+                <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-blue-50">🔔 New notifications</div>
                 <ul class="max-h-40 overflow-auto">
                   <li
                     v-for="notification in notificationStore.getUnreadNotifications"
@@ -62,12 +62,12 @@
                       <div class="flex items-center gap-2">
                         <span
                           class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 animate-pulse"
-                          >Mới</span
+                          >New</span
                         >
                         <button
                           @click="deleteNotification(notification.id)"
                           class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                          title="Xóa thông báo"
+                          title="Delete notification"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -94,7 +94,7 @@
               <!-- Pending Approvals -->
               <div v-if="pendingApprovals.length > 0" class="border-b border-gray-100">
                 <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-yellow-50">
-                  Phiếu export chờ duyệt
+                  Export receipts pending approval
                 </div>
                 <ul class="max-h-40 overflow-auto">
                   <li v-for="r in pendingApprovals" :key="r._id" class="px-4 py-2 hover:bg-gray-50">
@@ -110,7 +110,7 @@
                         <button
                           @click="deletePendingApproval(r._id)"
                           class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                          title="Xóa phiếu export"
+                          title="Delete export receipt"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -123,8 +123,10 @@
                         </button>
                       </div>
                     </div>
-                    <div class="text-xs text-gray-500">Khách hàng: {{ r.customerName || 'N/A' }}</div>
-                    <div v-if="r.createdAt" class="text-gray-400 mt-1">📅 {{ formatTime(r.createdAt) }}</div>
+                    <div class="text-xs text-gray-500">Customer: {{ r.customerName || 'N/A' }}</div>
+                    <div v-if="r.managerReview?.reviewedAt" class="text-gray-400 mt-1">
+                      📅 Reviewed {{ formatTime(r.managerReview.reviewedAt) }}
+                    </div>
                   </li>
                 </ul>
               </div>
@@ -133,19 +135,19 @@
                 v-if="!notificationStore.getUnreadNotifications.length && !pendingApprovals.length"
                 class="px-4 py-3 text-sm text-gray-500"
               >
-                Không có thông báo mới
+                No new notifications
               </div>
 
               <div class="px-4 py-2 border-t border-gray-100 flex justify-between">
                 <router-link to="/admin/export-approval" class="text-sm text-[#6A4C93] hover:underline"
-                  >Tới trang duyệt</router-link
+                  >Go to approval page</router-link
                 >
                 <button
                   v-if="notificationStore.unreadCount > 0"
                   @click="markAllNotificationsAsRead"
                   class="text-sm text-gray-600 hover:text-gray-800"
                 >
-                  Đánh dấu tất cả đã đọc
+                  Mark all as read
                 </button>
               </div>
             </div>
@@ -270,9 +272,9 @@ export default {
         .slice(0, 2);
     },
     unreadApprovalCount() {
-      // Chỉ hiển thị notification count (không cộng dồn với pendingApprovals)
+      // Only show notification count (notifications that haven't been viewed)
       const count = this.notificationStore.unreadCount;
-      console.log('📊 unreadApprovalCount computed:', count);
+      console.log('📊 Admin unreadApprovalCount computed - unread notifications:', count);
       return count;
     },
   },
@@ -325,6 +327,7 @@ export default {
         this.hasViewedNotifications = true;
         // Reset first load flag so old data won't create notifications
         this.isFirstLoad = true;
+        // Count will disappear when user views notifications
       }
     },
     markNotificationAsRead(notificationId) {
@@ -344,10 +347,10 @@ export default {
       const time = new Date(timestamp);
       const diffInMinutes = Math.floor((now - time) / (1000 * 60));
 
-      if (diffInMinutes < 1) return 'Vừa xong';
-      if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
-      return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+      if (diffInMinutes < 1) return 'Just now';
+      if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+      return `${Math.floor(diffInMinutes / 1440)} days ago`;
     },
     closeDropdown() {
       this.isDropdownOpen = false;
@@ -374,9 +377,33 @@ export default {
         console.log('Admin received export-created:', data);
         this.showNewNotice = true;
         this.hasViewedNotifications = false;
+        // Refresh pending approvals immediately
+        this.fetchPendingApprovals();
       });
 
-      // Nếu Socket.IO không khả dụng, fallback về polling
+      // Listen for export-status-changed events (when manager reviews)
+      socketService.on('export-status-changed', (data) => {
+        console.log('Admin received export-status-changed:', data);
+        // Chỉ cập nhật danh sách, không tạo notification mới
+        // Notification chỉ được tạo khi có export mới được tạo bởi staff
+        this.fetchPendingApprovals();
+      });
+
+      // Listen for export-approved events (when admin approves)
+      socketService.on('export-approved', (data) => {
+        console.log('Admin received export-approved:', data);
+        // Refresh pending approvals immediately
+        this.fetchPendingApprovals();
+      });
+
+      // Listen for export-rejected events (when admin rejects)
+      socketService.on('export-rejected', (data) => {
+        console.log('Admin received export-rejected:', data);
+        // Refresh pending approvals immediately
+        this.fetchPendingApprovals();
+      });
+
+      // If Socket.IO not available, fallback to polling
       if (!socket || socketService.isFallbackMode()) {
         console.log('🔄 Socket.IO not available, using polling fallback');
         this.enablePollingFallback();
@@ -384,7 +411,7 @@ export default {
     },
 
     enablePollingFallback() {
-      // Fallback polling mỗi 30 giây
+      // Fallback polling every 30 seconds
       this.pollTimer = setInterval(() => {
         this.fetchPendingApprovals();
       }, 30000);
@@ -412,33 +439,33 @@ export default {
         if (Array.isArray(list)) {
           const currentIds = new Set(list.map((item) => item._id));
 
-          // Tìm các approval mới (có trong current nhưng không có trong lastApprovalIds)
+          // Find approvals that are new (in current but not in lastApprovalIds)
           const newApprovals = list.filter((item) => !this.lastApprovalIds.has(item._id));
 
           console.log('🔍 Current IDs:', Array.from(currentIds));
           console.log('🔍 Last seen IDs:', Array.from(this.lastApprovalIds));
           console.log('🔍 New approvals found:', newApprovals.length);
 
-          // Tạo notification cho các approval mới (không phải lần đầu load)
+          // Create notification for new approvals (not the first load)
           if (newApprovals.length > 0 && !this.isFirstLoad) {
             console.log('🔔 Creating notification for new approvals:', newApprovals.length);
             this.showNewNotice = true;
             // Reset viewed flag when there are new items (user needs to see them)
             this.hasViewedNotifications = false;
 
-            // Tạo notification cho từng approval mới
+            // Create a notification for each new approval
             newApprovals.forEach((approvalItem) => {
               console.log('📝 Adding notification for:', approvalItem.receiptNumber || approvalItem._id);
               this.notificationStore.addNotification({
                 type: 'approval_created',
-                title: '🔔 Phiếu Export Đã Được Review',
-                message: `Phiếu ${approvalItem.receiptNumber || approvalItem._id} - ${approvalItem.customerName || 'N/A'} đã được manager review và chờ admin approval`,
+                title: '🔔 Export Receipt Reviewed',
+                message: `Receipt ${approvalItem.receiptNumber || approvalItem._id} - ${approvalItem.customerName || 'N/A'} has been reviewed by manager and awaits admin approval.`,
                 data: approvalItem,
               });
             });
           }
 
-          // Cập nhật lastApprovalIds và isFirstLoad
+          // Update lastApprovalIds and isFirstLoad
           this.lastApprovalIds = currentIds;
           this.isFirstLoad = false; // Mark as not first load after this call
         }

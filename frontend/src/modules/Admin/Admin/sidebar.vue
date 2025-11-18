@@ -94,12 +94,6 @@
           />
         </svg>
         Users
-        <span
-          v-if="userCount > 0"
-          class="ml-auto bg-[#6A4C93] text-white text-xs font-medium px-2.5 py-1 rounded-full shadow-sm"
-        >
-          {{ userCount }}
-        </span>
       </router-link>
 
       <!-- Products -->
@@ -175,6 +169,7 @@
 
 <script>
 import axios from 'axios';
+import socketService from '@/services/socketService';
 
 export default {
   name: 'AdminSidebar',
@@ -182,8 +177,8 @@ export default {
     return {
       userInfo: null,
       adminInfo: null,
-      userCount: 0,
       pendingApprovals: 0,
+      loadStatsTimeout: null, // Debounce timeout
     };
   },
   computed: {
@@ -219,6 +214,29 @@ export default {
   mounted() {
     this.loadUserInfo();
     this.loadStats();
+    // Initialize Socket.IO connection
+    this.initializeSocket();
+  },
+  beforeUnmount() {
+    // Clear timeout
+    if (this.loadStatsTimeout) {
+      clearTimeout(this.loadStatsTimeout);
+    }
+    // Remove event listeners
+    if (this.handleExportCreated) {
+      window.removeEventListener('export-created', this.handleExportCreated);
+    }
+    if (this.handleExportStatusChanged) {
+      window.removeEventListener('export-status-changed', this.handleExportStatusChanged);
+    }
+    if (this.handleExportApproved) {
+      window.removeEventListener('export-approved', this.handleExportApproved);
+    }
+    if (this.handleExportRejected) {
+      window.removeEventListener('export-rejected', this.handleExportRejected);
+    }
+    // Disconnect Socket.IO
+    socketService.disconnect();
   },
   methods: {
     async loadUserInfo() {
@@ -266,13 +284,10 @@ export default {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         if (!token) return;
 
-        // Load user count
-        const usersResponse = await axios.get('/api/users', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (usersResponse.data.users) {
-          this.userCount = usersResponse.data.users.length;
-        }
+        // Load user count (if needed in future)
+        // const usersResponse = await axios.get('/api/users', {
+        //   headers: { Authorization: `Bearer ${token}` },
+        // });
 
         // Load pending approvals count
         const approvalsResponse = await axios.get('/api/export-receipts', {
@@ -280,11 +295,92 @@ export default {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (approvalsResponse.data.exportReceipts) {
-          this.pendingApprovals = approvalsResponse.data.exportReceipts.length;
+          const newCount = approvalsResponse.data.exportReceipts.length;
+          // Chỉ log khi count thực sự thay đổi
+          if (this.pendingApprovals !== newCount) {
+            console.log('📊 AdminSidebar - Updating pendingApprovals count:', this.pendingApprovals, '->', newCount);
+            this.pendingApprovals = newCount;
+          }
         }
       } catch (error) {
         console.error('Error loading admin stats:', error);
       }
+    },
+
+    // Debounced version of loadStats
+    debouncedLoadStats() {
+      if (this.loadStatsTimeout) {
+        clearTimeout(this.loadStatsTimeout);
+      }
+      this.loadStatsTimeout = setTimeout(() => {
+        this.loadStats();
+      }, 500); // 500ms debounce
+    },
+
+    initializeSocket() {
+      console.log('🚀 Initializing Socket.IO for AdminSidebar...');
+      // Connect to Socket.IO
+      const socket = socketService.connect();
+
+      // Join admin room
+      if (socket) {
+        console.log('🏠 Joining admin room...');
+        socket.emit('join-room', 'admins');
+        console.log('✅ AdminSidebar socket connected and joined admins room');
+      } else {
+        console.warn('⚠️ Socket not available, pending approvals count will not update in real-time');
+      }
+
+      // Listen for custom events from socket service
+      this.handleExportCreated = (event) => {
+        const data = event.detail;
+        console.log('📦 AdminSidebar - Export created:', data);
+        // Refresh pending approvals count
+        this.debouncedLoadStats();
+      };
+
+      this.handleExportStatusChanged = (event) => {
+        const data = event.detail;
+        console.log('📦 AdminSidebar - Export status changed:', data);
+        // Update count immediately (increase because export is now pending approval)
+        const oldCount = this.pendingApprovals;
+        this.pendingApprovals += 1;
+        console.log('📊 AdminSidebar - Updated pendingApprovals count:', oldCount, '->', this.pendingApprovals);
+        // Also refresh from API to ensure accuracy
+        this.debouncedLoadStats();
+      };
+
+      this.handleExportApproved = (event) => {
+        const data = event.detail;
+        console.log('✅ AdminSidebar - Export approved:', data);
+        // Update count immediately (decrease because export is no longer pending)
+        if (this.pendingApprovals > 0) {
+          const oldCount = this.pendingApprovals;
+          this.pendingApprovals -= 1;
+          console.log('📊 AdminSidebar - Updated pendingApprovals count:', oldCount, '->', this.pendingApprovals);
+        }
+        // Also refresh from API to ensure accuracy
+        this.debouncedLoadStats();
+      };
+
+      this.handleExportRejected = (event) => {
+        const data = event.detail;
+        console.log('❌ AdminSidebar - Export rejected:', data);
+        // Update count immediately (decrease because export is no longer pending)
+        if (this.pendingApprovals > 0) {
+          const oldCount = this.pendingApprovals;
+          this.pendingApprovals -= 1;
+          console.log('📊 AdminSidebar - Updated pendingApprovals count:', oldCount, '->', this.pendingApprovals);
+        }
+        // Also refresh from API to ensure accuracy
+        this.debouncedLoadStats();
+      };
+
+      // Add event listeners
+      window.addEventListener('export-created', this.handleExportCreated);
+      window.addEventListener('export-status-changed', this.handleExportStatusChanged);
+      window.addEventListener('export-approved', this.handleExportApproved);
+      window.addEventListener('export-rejected', this.handleExportRejected);
     },
   },
   watch: {

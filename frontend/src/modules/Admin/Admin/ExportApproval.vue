@@ -244,10 +244,6 @@
             @submit="onApprovalSubmit"
           />
 
-          <!-- Success/Error Messages -->
-          <div v-if="message" :class="messageClass" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50">
-            {{ message }}
-          </div>
         </div>
       </main>
     </div>
@@ -257,10 +253,12 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from 'vue-toastification';
 import AdminSidebar from './sidebar.vue';
 import HeadBar from './headbar.vue';
 import ViewReceiptModal from './ViewReceiptModal.vue';
 import ApprovalModal from './ApprovalModal.vue';
+import socketService from '@/services/socketService';
 
 export default {
   name: 'ExportApproval',
@@ -270,12 +268,14 @@ export default {
     ViewReceiptModal,
     ApprovalModal,
   },
+  setup() {
+    const toast = useToast();
+    return { toast };
+  },
   data() {
     return {
       isLoading: false,
       isSubmitting: false,
-      message: '',
-      messageType: '',
       isDropdownOpen: false,
       exportReceipts: [],
       pagination: null,
@@ -296,11 +296,6 @@ export default {
     };
   },
   computed: {
-    messageClass() {
-      return this.messageType === 'success'
-        ? 'bg-green-50 text-green-800 border border-green-200'
-        : 'bg-red-50 text-red-800 border border-red-200';
-    },
     userFullName() {
       const u = this.currentUserObj || this._loadUserFromStorage();
       if (!u) return 'User';
@@ -334,9 +329,13 @@ export default {
   mounted() {
     this.fetchExportReceipts();
     document.addEventListener('click', this.handleDocClick);
+    // Initialize Socket.IO connection
+    this.initializeSocket();
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleDocClick);
+    // Disconnect Socket.IO
+    socketService.disconnect();
   },
 
   methods: {
@@ -388,7 +387,7 @@ export default {
         this.pagination = response.data.pagination;
       } catch (error) {
         console.error('Error fetching export receipts:', error);
-        this.showMessage('Failed to load export receipts', 'error');
+        this.toast.error('Không thể tải danh sách phiếu xuất');
       } finally {
         this.isLoading = false;
       }
@@ -476,15 +475,17 @@ export default {
         );
 
         if (response.data.success) {
-          this.showMessage(response.data.message, 'success');
+          this.toast.success(
+            `Phiếu xuất đã được ${this.approvalAction === 'approve' ? 'duyệt' : 'từ chối'} thành công!`
+          );
           this.closeApprovalModal();
           this.fetchExportReceipts();
         } else {
-          this.showMessage(response.data.message || 'Operation failed', 'error');
+          this.toast.error(response.data.message || 'Thao tác thất bại');
         }
       } catch (error) {
         console.error('Error submitting approval:', error);
-        this.showMessage(error.response?.data?.message || 'Failed to submit approval', 'error');
+        this.toast.error(error.response?.data?.message || 'Không thể gửi phê duyệt');
       } finally {
         this.isSubmitting = false;
       }
@@ -600,12 +601,40 @@ export default {
       return d.toLocaleString();
     },
 
-    showMessage(text, type) {
-      this.message = text;
-      this.messageType = type;
-      setTimeout(() => {
-        this.message = '';
-      }, 5000);
+
+    initializeSocket() {
+      console.log('🚀 Initializing Socket.IO for ExportApproval...');
+      // Connect to Socket.IO
+      const socket = socketService.connect();
+
+      // Join admin room
+      if (socket) {
+        console.log('🏠 Joining admin room...');
+        socket.emit('join-room', 'admins');
+      } else {
+        console.warn('⚠️ Socket not available, export receipts will not update in real-time');
+      }
+
+      // Listen for export-created events (new exports from staff)
+      socketService.on('export-created', (data) => {
+        console.log('📦 ExportApproval - Export created:', data);
+        // Refresh export receipts list
+        this.fetchExportReceipts();
+      });
+
+      // Listen for export-status-changed events (when manager reviews)
+      socketService.on('export-status-changed', (data) => {
+        console.log('📦 ExportApproval - Export status changed:', data);
+        // Refresh export receipts list
+        this.fetchExportReceipts();
+      });
+
+      // Listen for export-approved events (when admin approves)
+      socketService.on('export-approved', (data) => {
+        console.log('✅ ExportApproval - Export approved:', data);
+        // Refresh export receipts list
+        this.fetchExportReceipts();
+      });
     },
   },
 };

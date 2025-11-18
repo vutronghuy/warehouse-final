@@ -13,11 +13,11 @@ export const useNotificationStore = defineStore('notification', () => {
   const getNotificationsByType = (type: string) => notifications.value.filter((n) => n.type === type);
 
   // Actions
-  const addNotification = (notification: Omit<INotification, 'id' | 'timestamp' | 'read'>) => {
+  const addNotification = (notification: Omit<INotification, 'id' | 'read'> & { timestamp?: Date }) => {
     const newNotification: INotification = {
       ...notification,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      timestamp: new Date(),
+      timestamp: notification.timestamp || new Date(),
       read: false,
     };
 
@@ -34,7 +34,8 @@ export const useNotificationStore = defineStore('notification', () => {
     const notification = notifications.value.find((n) => n.id === notificationId);
     if (notification && !notification.read) {
       notification.read = true;
-      unreadCount.value = Math.max(0, unreadCount.value - 1);
+      // Don't decrease count - count should be based on actual pending invoices
+      // unreadCount.value = Math.max(0, unreadCount.value - 1);
     }
   };
 
@@ -42,7 +43,8 @@ export const useNotificationStore = defineStore('notification', () => {
     notifications.value.forEach((n) => {
       n.read = true;
     });
-    unreadCount.value = 0;
+    // Don't reset count to 0 - count should be based on actual pending invoices
+    // unreadCount.value = 0;
   };
 
   const removeNotification = (notificationId: string) => {
@@ -71,9 +73,28 @@ export const useNotificationStore = defineStore('notification', () => {
     unreadCount.value = 0;
   };
 
-  // Clear all notifications on page load/reload
+  // Clear all notifications on page load/reload (but keep count)
   const clearOnPageLoad = () => {
     notifications.value = [];
+    // Don't reset unreadCount to 0 - keep it persistent
+    // unreadCount.value = 0;
+  };
+
+  // Sync count with actual pending invoices from server
+  const syncCountWithServer = (actualCount: number) => {
+    if (actualCount !== unreadCount.value) {
+      console.log('Syncing notification count with server:', {
+        current: unreadCount.value,
+        server: actualCount,
+        updating: true
+      });
+      unreadCount.value = actualCount;
+    }
+  };
+
+  // Reset count to 0 (only when invoices are actually processed)
+  const resetCount = () => {
+    console.log('Resetting notification count to 0');
     unreadCount.value = 0;
   };
 
@@ -89,6 +110,7 @@ export const useNotificationStore = defineStore('notification', () => {
       title: '🔔 Phiếu Export Mới',
       message: `Phiếu ${receiptNumber} - ${customerName} (${itemCount} sản phẩm, $${totalAmount}) đã được tạo bởi staff và chờ review`,
       data: exportData,
+      timestamp: new Date(),
     });
   };
 
@@ -104,6 +126,7 @@ export const useNotificationStore = defineStore('notification', () => {
       title: '📄 Invoice Mới',
       message: `Invoice ${invoiceNumber} - ${customerName} (${itemCount} sản phẩm, $${totalAmount}) đã được tạo bởi staff và chờ accounter review`,
       data: invoiceData,
+      timestamp: new Date(),
     });
   };
 
@@ -119,6 +142,7 @@ export const useNotificationStore = defineStore('notification', () => {
       title: '✅ Phiếu Export Đã Duyệt',
       message: `Phiếu ${receiptNumber} - ${customerName} (${itemCount} sản phẩm, $${totalAmount}) đã được admin duyệt và sẵn sàng tạo invoice`,
       data: exportData,
+      timestamp: new Date(),
     });
   };
 
@@ -134,6 +158,7 @@ export const useNotificationStore = defineStore('notification', () => {
       title: '🗑️ Invoice Đã Xóa',
       message: `Invoice ${invoiceNumber} - ${customerName} (${itemCount} sản phẩm, $${totalAmount}) đã được xóa bởi staff`,
       data: invoiceData,
+      timestamp: new Date(),
     });
   };
 
@@ -153,6 +178,9 @@ export const useNotificationStore = defineStore('notification', () => {
     clearAllNotifications,
     resetStore,
     clearOnPageLoad,
+    syncCountWithServer,
+    resetCount,
+    // Specific notifications
     notifyExportCreated,
     notifyInvoiceCreated,
     notifyExportApproved,

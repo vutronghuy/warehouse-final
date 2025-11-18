@@ -1,253 +1,282 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <!-- Header -->
-    <div class="bg-white shadow-sm border-b">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-6">
-          <div>
-            <h1 class="text-2xl font-bold text-gray-900">Accounter Dashboard</h1>
-            <p class="text-gray-600">Financial reporting and inventory analysis</p>
+    <AccounterSidebar />
+
+    <AccounterHeader />
+
+    <div class="ml-64 py-8">
+      <!-- Main Content -->
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Chart 1: Top Products (Horizontal bar) -->
+          <div class="bg-white rounded-xl shadow-sm border p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Top 10 Best Selling Products</h3>
+              </div>
+              <div class="text-sm text-gray-500">
+                Total: {{ topProducts.length }} products
+              </div>
+            </div>
+
+            <div class="min-h-[250px]">
+              <div v-if="isLoadingProducts" class="flex flex-col items-center justify-center py-12 text-gray-500">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+                <p class="text-lg font-medium">Loading data...</p>
+              </div>
+
+              <div v-else-if="topProducts.length === 0" class="flex flex-col items-center justify-center py-12 text-gray-500">
+                <svg class="w-12 h-12 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-2M4 13h2m13-8V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v1M7 7h10"></path>
+                </svg>
+                <p class="text-lg font-medium">No product data</p>
+                <p class="text-sm">Data will appear when invoices are created</p>
+              </div>
+
+              <div v-else class="w-full">
+                <div class="relative w-full h-72">
+                  <canvas ref="topProductsChartRef" class="chart-canvas absolute inset-0"></canvas>
+                </div>
+                <div class="mt-3 text-xs text-gray-500">
+                  Shows Top 10 by quantity sold.
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+
+          <!-- Chart 2: Cash Flow - Line Chart (Net = Revenue - Cost) -->
+          <div class="bg-white rounded-xl shadow-sm border p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Financial Analysis</h3>
+              </div>
+
+              <!-- Filter Controls -->
+              <div class="flex items-center space-x-3">
+                <select v-model="chartFilters.period" @change="updateChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="year">Year</option>
+                  <option value="month">Month</option>
+                  <option value="day">Day</option>
+                </select>
+
+                <select v-model="chartFilters.year" @change="updateChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                  <option value="2023">2023</option>
+                  <option value="2022">2022</option>
+                </select>
+
+                <select v-if="chartFilters.period === 'day'" v-model="chartFilters.month" @change="updateChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="1">month 1</option>
+                  <option value="2">month 2</option>
+                  <option value="3">month 3</option>
+                  <option value="4">month 4</option>
+                  <option value="5">month 5</option>
+                  <option value="6">month 6</option>
+                  <option value="7">month 7</option>
+                  <option value="8">month 8</option>
+                  <option value="9">month 9</option>
+                  <option value="10">month 10</option>
+                  <option value="11">month 11</option>
+                  <option value="12">month 12</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="min-h-[250px]">
+              <div v-if="isLoadingCashFlow" class="flex flex-col items-center justify-center py-12 text-gray-500">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+                <p class="text-lg font-medium">Loading cash flow data...</p>
+              </div>
+
+              <div v-else>
+                <div class="relative w-full h-72 mb-4">
+                  <canvas ref="cashFlowChartRef" class="chart-canvas absolute inset-0"></canvas>
+                </div>
+
+               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div class="bg-green-50 rounded-lg p-3">
+      <div class="text-sm font-medium text-green-600">Total Revenue</div>
+      <div class="text-xl sm:text-2xl font-bold text-green-700 leading-tight">
+        <span class="inline-block max-w-full break-words whitespace-normal">
+          {{ formatCurrency(cashFlowSummary.totalRevenue) }}
+        </span>
       </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Chart 1: Top Products (Horizontal bar) -->
-        <div class="bg-white rounded-xl shadow-sm border p-6">
-          <div class="flex items-center justify-between mb-4">
-            <div>
-              <h3 class="text-lg font-semibold text-gray-900">Top 10 Best Selling Products</h3>
-            </div>
-            <div class="text-sm text-gray-500">
-              Total: {{ topProducts.length }} products
-            </div>
-          </div>
+    <div class="bg-red-50 rounded-lg p-3">
+      <div class="text-sm font-medium text-red-600">Total Cost</div>
+      <div class="text-xl sm:text-2xl font-bold text-red-700 leading-tight">
+        <span class="inline-block max-w-full break-words whitespace-normal">
+          {{ formatCurrency(cashFlowSummary.totalCost) }}
+        </span>
+      </div>
+    </div>
 
-          <div class="min-h-[250px]">
-            <div v-if="isLoadingProducts" class="flex flex-col items-center justify-center py-12 text-gray-500">
-              <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-              <p class="text-lg font-medium">Loading data...</p>
-            </div>
+    <div class="bg-blue-50 rounded-lg p-3">
+      <div class="text-sm font-medium text-blue-600">Profit</div>
+      <div :class="['text-xl sm:text-2xl font-bold leading-tight', cashFlowSummary.totalProfit >= 0 ? 'text-blue-700' : 'text-red-700']">
+        <span class="inline-block max-w-full break-words whitespace-normal">
+          {{ formatCurrency(cashFlowSummary.totalProfit) }}
+        </span>
+      </div>
+    </div>
+  </div>
 
-            <div v-else-if="topProducts.length === 0" class="flex flex-col items-center justify-center py-12 text-gray-500">
-              <svg class="w-12 h-12 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-2M4 13h2m13-8V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v1M7 7h10"></path>
-              </svg>
-              <p class="text-lg font-medium">No product data</p>
-              <p class="text-sm">Data will appear when invoices are created</p>
-            </div>
-
-            <div v-else class="w-full">
-              <div class="relative w-full h-72">
-                <canvas ref="topProductsChartRef" class="chart-canvas absolute inset-0"></canvas>
-              </div>
-              <div class="mt-3 text-xs text-gray-500">
-                Shows Top 10 by quantity sold.
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Chart 2: Cash Flow - Line Chart (Net = Revenue - Cost) -->
+        <!-- Chart 3: Inventory Value (line over time) -->
         <div class="bg-white rounded-xl shadow-sm border p-6">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h3 class="text-lg font-semibold text-gray-900">Financial Analysis</h3>
+              <h3 class="text-lg font-semibold text-gray-900">Inventory Value</h3>
+              <p class="text-sm text-gray-600 mt-1">Track total inventory value (at cost) over time.</p>
+            </div>
+            <div class="text-sm text-gray-500">
+              Scope: {{ inventorySeries.length ? `${inventorySeries.length} periods` : '—' }}
+            </div>
+          </div>
+
+          <div class="min-h-[300px]">
+            <div v-if="isLoadingInventory" class="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+              <p class="text-lg font-medium">Loading inventory data...</p>
             </div>
 
-            <!-- Filter Controls -->
-            <div class="flex items-center space-x-3">
-              <select v-model="chartFilters.period" @change="updateChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="year">Year</option>
-                <option value="month">Month</option>
-                <option value="day">Day</option>
-              </select>
+            <div v-else-if="inventorySeries.length === 0" class="flex flex-col items-center justify-center py-12 text-gray-500">
+              <p class="text-lg font-medium">No inventory data over time</p>
+              <p class="text-sm">The API does not return historical inventory data.</p>
+            </div>
 
-              <select v-model="chartFilters.year" @change="updateChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <div v-else>
+              <div class="relative w-full h-80">
+                <canvas ref="inventoryChartRef" class="chart-canvas absolute inset-0"></canvas>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="bg-purple-50 rounded-lg p-3">
+                  <div class="text-sm font-medium text-purple-600">Present value</div>
+                  <div class="text-lg font-bold text-purple-700">{{ formatCurrency(inventorySummary.currentValue) }}</div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <div class="text-sm font-medium text-gray-600">Trend (Δ)</div>
+                  <div :class="['text-lg font-bold', inventorySummary.trend >= 0 ? 'text-green-700' : 'text-red-700']">
+                    {{ inventorySummary.trend >= 0 ? '+' : '' }}{{ formatCurrency(inventorySummary.trend) }}
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <div class="text-sm font-medium text-gray-600">Average</div>
+                  <div class="text-lg font-bold text-gray-700">{{ formatCurrency(inventorySummary.averageValue) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart 4: Combined - Grouped Bars (Revenue & Cost) + Line (Profit %) -->
+        <div class="bg-white rounded-xl shadow-sm border p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">Revenue vs Cost (Grouped) + Profit %</h3>
+              <p class="text-sm text-gray-600 mt-1">Compare two selected years, by month within year. <span class="text-green-600 font-medium">🔄 Real-time updates</span></p>
+            </div>
+            <div class="flex items-center space-x-3">
+              <select v-model="compareFilters.yearA" @change="refreshCompareChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <option value="2025">2025</option>
                 <option value="2024">2024</option>
                 <option value="2023">2023</option>
                 <option value="2022">2022</option>
               </select>
-
-              <select v-if="chartFilters.period === 'day'" v-model="chartFilters.month" @change="updateChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="1">month 1</option>
-                <option value="2">month 2</option>
-                <option value="3">month 3</option>
-                <option value="4">month 4</option>
-                <option value="5">month 5</option>
-                <option value="6">month 6</option>
-                <option value="7">month 7</option>
-                <option value="8">month 8</option>
-                <option value="9">month 9</option>
-                <option value="10">month 10</option>
-                <option value="11">month 11</option>
-                <option value="12">month 12</option>
+              <span class="text-gray-500 text-sm">vs</span>
+              <select v-model="compareFilters.yearB" @change="refreshCompareChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+                <option value="2023">2023</option>
+                <option value="2022">2022</option>
               </select>
+              <button @click="refreshCompareChart" :disabled="isLoadingCompareChart" class="text-sm bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1">
+                <svg v-if="isLoadingCompareChart" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span>Refresh</span>
+              </button>
             </div>
           </div>
 
           <div class="min-h-[250px]">
-            <div v-if="isLoadingCashFlow" class="flex flex-col items-center justify-center py-12 text-gray-500">
+            <div v-if="isLoadingCompareChart" class="flex flex-col items-center justify-center py-12 text-gray-500">
               <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-              <p class="text-lg font-medium">Loading cash flow data...</p>
+              <p class="text-lg font-medium">Loading comparison data...</p>
             </div>
 
-            <div v-else>
-              <div class="relative w-full h-72 mb-4">
-                <canvas ref="cashFlowChartRef" class="chart-canvas absolute inset-0"></canvas>
-              </div>
-
-             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-  <div class="bg-green-50 rounded-lg p-3">
-    <div class="text-sm font-medium text-green-600">Total Revenue</div>
-    <div class="text-xl sm:text-2xl font-bold text-green-700 leading-tight">
-      <span class="inline-block max-w-full break-words whitespace-normal">
-        {{ formatCurrency(cashFlowSummary.totalRevenue) }}
-      </span>
-    </div>
-  </div>
-
-  <div class="bg-red-50 rounded-lg p-3">
-    <div class="text-sm font-medium text-red-600">Total Cost</div>
-    <div class="text-xl sm:text-2xl font-bold text-red-700 leading-tight">
-      <span class="inline-block max-w-full break-words whitespace-normal">
-        {{ formatCurrency(cashFlowSummary.totalCost) }}
-      </span>
-    </div>
-  </div>
-
-  <div class="bg-blue-50 rounded-lg p-3">
-    <div class="text-sm font-medium text-blue-600">Profit</div>
-    <div :class="['text-xl sm:text-2xl font-bold leading-tight', cashFlowSummary.totalProfit >= 0 ? 'text-blue-700' : 'text-red-700']">
-      <span class="inline-block max-w-full break-words whitespace-normal">
-        {{ formatCurrency(cashFlowSummary.totalProfit) }}
-      </span>
-    </div>
-  </div>
-</div>
-
+            <div v-else class="relative w-full h-72">
+              <canvas ref="cashFlowCombinedChartRef" class="chart-canvas absolute inset-0"></canvas>
+            </div>
+            <div class="mt-3 text-xs text-gray-500">
+              Bars: Revenue & Cost (VND) — Line: Profit % using the right axis
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Chart 3: Inventory Value (line over time) -->
-      <div class="bg-white rounded-xl shadow-sm border p-6">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900">Inventory Value</h3>
-            <p class="text-sm text-gray-600 mt-1">Track total inventory value (at cost) over time.</p>
-          </div>
-          <div class="text-sm text-gray-500">
-            Scope: {{ inventorySeries.length ? `${inventorySeries.length} periods` : '—' }}
-          </div>
-        </div>
-
-        <div class="min-h-[300px]">
-          <div v-if="isLoadingInventory" class="flex flex-col items-center justify-center py-12 text-gray-500">
-            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-            <p class="text-lg font-medium">Loading inventory data...</p>
-          </div>
-
-          <div v-else-if="inventorySeries.length === 0" class="flex flex-col items-center justify-center py-12 text-gray-500">
-            <p class="text-lg font-medium">No inventory data over time</p>
-            <p class="text-sm">The API does not return historical inventory data.</p>
-          </div>
-
-          <div v-else>
-            <div class="relative w-full h-80">
-              <canvas ref="inventoryChartRef" class="chart-canvas absolute inset-0"></canvas>
-            </div>
-
-            <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div class="bg-purple-50 rounded-lg p-3">
-                <div class="text-sm font-medium text-purple-600">Present value</div>
-                <div class="text-lg font-bold text-purple-700">{{ formatCurrency(inventorySummary.currentValue) }}</div>
-              </div>
-              <div class="bg-gray-50 rounded-lg p-3">
-                <div class="text-sm font-medium text-gray-600">Trend (Δ)</div>
-                <div :class="['text-lg font-bold', inventorySummary.trend >= 0 ? 'text-green-700' : 'text-red-700']">
-                  {{ inventorySummary.trend >= 0 ? '+' : '' }}{{ formatCurrency(inventorySummary.trend) }}
-                </div>
-              </div>
-              <div class="bg-gray-50 rounded-lg p-3">
-                <div class="text-sm font-medium text-gray-600">Average</div>
-                <div class="text-lg font-bold text-gray-700">{{ formatCurrency(inventorySummary.averageValue) }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Chart 4: Combined - Grouped Bars (Revenue & Cost) + Line (Profit %) -->
-      <div class="bg-white rounded-xl shadow-sm border p-6">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900">Revenue vs Cost (Grouped) + Profit %</h3>
-            <p class="text-sm text-gray-600 mt-1">Compare two selected years, by month within year. <span class="text-green-600 font-medium">🔄 Real-time updates</span></p>
-          </div>
-          <div class="flex items-center space-x-3">
-            <select v-model="compareFilters.yearA" @change="refreshCompareChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-              <option value="2022">2022</option>
-            </select>
-            <span class="text-gray-500 text-sm">vs</span>
-            <select v-model="compareFilters.yearB" @change="refreshCompareChart" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-              <option value="2022">2022</option>
-            </select>
-            <button @click="refreshCompareChart" :disabled="isLoadingCompareChart" class="text-sm bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1">
-              <svg v-if="isLoadingCompareChart" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-              </svg>
-              <span>Refresh</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="min-h-[250px]">
-          <div v-if="isLoadingCompareChart" class="flex flex-col items-center justify-center py-12 text-gray-500">
-            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-            <p class="text-lg font-medium">Loading comparison data...</p>
-          </div>
-
-          <div v-else class="relative w-full h-72">
-            <canvas ref="cashFlowCombinedChartRef" class="chart-canvas absolute inset-0"></canvas>
-          </div>
-          <div class="mt-3 text-xs text-gray-500">
-            Bars: Revenue & Cost (VND) — Line: Profit % using the right axis
-          </div>
-        </div>
       </div>
 
     </div>
   </div>
+
+  <!-- ChatBot Component -->
+  <ChatBot />
 </template>
 
 <script setup>
 /*
-  Keep original fetchCashFlow logic intact — do not change calculations for totalRevenue/totalCost/backup/fallback.
-  Added: cashFlowSeries (if API returns a series) and UI renders a line chart net = revenue - cost.
+  Chỉnh sửa: realtime incremental updates cho charts (không reload toàn bộ).
+  - Nếu event payload đủ chi tiết (invoice with items and finalAmount), charts sẽ tăng cục bộ.
+  - Nếu payload không rõ, fallback: refreshCharts() để tải lại an toàn.
 */
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import axios from 'axios';
 import Chart from 'chart.js/auto';
 import socketService from '@/services/socketService';
+import AccounterHeader from './accounterHeader.vue';
+import AccounterSidebar from './accounterSidebar.vue';
+import ChatBot from '@/components/ChatBot/ChatBot.vue';
 
 // Exchange rate constants (keep original)
 const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
+
+const warehouseId = ref(null);
+
+const resolveAccounterWarehouseId = () => {
+  try {
+    const storedUserRaw = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (!storedUserRaw) return null;
+    const parsed = JSON.parse(storedUserRaw);
+    const roleData = parsed?.accounter;
+    const rawId = roleData?.warehouseId;
+    if (!rawId) return null;
+    if (typeof rawId === 'object') {
+      return rawId._id || rawId.toString?.() || null;
+    }
+    return rawId;
+  } catch (error) {
+    console.warn('Unable to resolve accounter warehouseId from storage:', error);
+    return null;
+  }
+};
+
+warehouseId.value = resolveAccounterWarehouseId();
+if (!warehouseId.value) {
+  console.warn('Accounter warehouseId not found in storage. Relying on backend enforcement.');
+}
+
+const getWarehouseQuery = () => (warehouseId.value ? { warehouse: warehouseId.value } : {});
 
 // Reactive data (keep original structure)
 const topProducts = ref([]);
@@ -280,7 +309,6 @@ const chartFilters = ref({
   year: '2025',
   month: '1'
 });
-const isRefreshing = ref(false);
 
 // Chart refs & instances
 const topProductsChartRef = ref(null);
@@ -319,79 +347,13 @@ const formatNumber = (n) => {
 
 // Chart filter functions - only affect line chart data fetch/update
 const updateChart = () => {
-  console.log('Updating line chart with filters:', chartFilters.value);
-  fetchCashFlowTimeSeries(); // fetch line chart data
-  // also refresh summary boxes if we already have series
+  fetchCashFlowTimeSeries();
   updateSummaryFromSeries();
 };
 
-// Removed unused refreshChart function
-
-// Fetch cash flow time series data for the line chart
-const fetchCashFlowTimeSeries = async () => {
-  try {
-    const response = await axios.get('/api/reports/cash-flow-time-series', {
-      params: {
-        period: chartFilters.value.period,
-        year: chartFilters.value.year,
-        month: chartFilters.value.month
-      }
-    });
-
-    console.log('📊 Cash Flow Time Series API Response:', response.data);
-
-    if (response.data?.success && response.data.data) {
-      // Update only the series used by the line chart
-      cashFlowSeries.value = response.data.data.series || [];
-
-      console.log('📈 Updated cashFlowSeries for line chart:', cashFlowSeries.value);
-      console.log('🔍 Line chart data source: Invoice.finalAmount by month/year');
-
-      // Render the line chart
-      renderCashFlowChart();
-
-      // When filtering by year, update the 3 summary boxes to only that year's data
-      updateSummaryFromSeries();
-    } else {
-      console.error('Cash Flow Time Series API failed:', response.data);
-      cashFlowSeries.value = [];
-      renderCashFlowChart();
-    }
-
-  } catch (error) {
-    console.error('Error fetching cash flow time series:', error);
-    cashFlowSeries.value = [];
-    renderCashFlowChart();
-  }
-};
-
-// Recalculate summary boxes from series based on current filters
-const updateSummaryFromSeries = () => {
-  const period = chartFilters.value.period;
-  if (!cashFlowSeries.value || cashFlowSeries.value.length === 0) return;
-
-  if (period === 'year') {
-    const selectedYear = Number(chartFilters.value.year);
-    // series for period='year' contains multiple years; pick the selected one
-    const yearItem = cashFlowSeries.value.find(item =>
-      Number(item.period) === selectedYear ||
-      (item.label && item.label.includes(String(selectedYear)))
-    );
-
-    const totalRevenue = yearItem?.revenueVND ? safeNumber(yearItem.revenueVND) : 0;
-    const totalCost = yearItem?.costVND ? safeNumber(yearItem.costVND) : 0;
-    const totalProfit = totalRevenue - totalCost;
-
-    cashFlowSummary.value = { totalRevenue, totalCost, totalProfit };
-  }
-};
-
-// Generate 12 month labels
+// Generate 12 month labels (cleaned)
 const generateMonthLabels = (year) => {
-  const months = [
-    ' 1', ' 2', ' 3', ' 4', ' 5', ' 6',
-    ' 7', ' 8', ' 9', ' 10', ' 11', ' 12'
-  ];
+  const months = Array.from({ length: 12 }, (_, i) => `${i + 1}`);
   return months.map(month => `${month}/${year}`);
 };
 
@@ -407,24 +369,23 @@ const generateSampleData = () => {
     const baseCost = 30000000 + Math.random() * 25000000;    // 30-55M VND
     const net = baseRevenue - baseCost;
 
-    revenue.push(baseRevenue);
-    cost.push(baseCost);
-    netProfit.push(net);
+    revenue.push(Math.round(baseRevenue));
+    cost.push(Math.round(baseCost));
+    netProfit.push(Math.round(net));
   }
 
   return { revenue, cost, netProfit };
 };
 
 // ----------------- FETCH FUNCTIONS -----------------
-
-// fetchTopProducts (kept similar)
 const fetchTopProducts = async () => {
   try {
     isLoadingProducts.value = true;
     const response = await axios.get('/api/reports/top-products', {
       params: {
         period: 'all',
-        top: 10
+        top: 10,
+        ...getWarehouseQuery()
       }
     });
 
@@ -442,16 +403,22 @@ const fetchTopProducts = async () => {
     topProducts.value = [];
   } finally {
     isLoadingProducts.value = false;
+    // render or update chart after data loaded
+    await nextTick();
+    renderTopProductsChart();
   }
 };
 
-// Keep original fetchCashFlow logic intact (only detect series if present)
 const fetchCashFlow = async () => {
   try {
     isLoadingCashFlow.value = true;
 
     // Get total revenue from all invoices in DB
-    const totalRevenueResponse = await axios.get('/api/invoices/total-revenue');
+    const totalRevenueResponse = await axios.get('/api/invoices/total-revenue', {
+      params: {
+        ...getWarehouseQuery()
+      }
+    });
 
     if (totalRevenueResponse.data?.success) {
       const totalRevenue = totalRevenueResponse.data.totalRevenue || 0;
@@ -459,7 +426,8 @@ const fetchCashFlow = async () => {
       // Get total cost from cash flow API (all time)
       const cashFlowResponse = await axios.get('/api/reports/cash-flow', {
         params: {
-          period: 'all' // get all time
+          period: 'all',
+          ...getWarehouseQuery()
         }
       });
 
@@ -467,62 +435,38 @@ const fetchCashFlow = async () => {
       console.log('Full Cash Flow API Response:', JSON.stringify(cashFlowResponse.data, null, 2));
 
       if (cashFlowResponse.data?.success && cashFlowResponse.data.data?.summary) {
-        // totalCost from API is already converted to VND in the backend
         totalCost = cashFlowResponse.data.data.summary.totalCost || 0;
-
-        console.log('Cash Flow API Response Summary:', cashFlowResponse.data.data.summary);
-        console.log('Total Cost VND from API (already converted):', totalCost);
       } else {
         console.log('Cash Flow API failed or no data. Response:', cashFlowResponse.data);
-        console.log('API Success:', cashFlowResponse.data?.success);
-        console.log('API Data:', cashFlowResponse.data?.data);
-        console.log('API Summary:', cashFlowResponse.data?.data?.summary);
       }
 
       // Backup: If totalCost == 0, try total-import-cost API
       if (totalCost === 0) {
-        console.log('🔄 totalCost is 0, trying backup method: total-import-cost API...');
-
         try {
-          const importCostResponse = await axios.get('/api/reports/total-import-cost');
-          console.log('Import Cost API response:', importCostResponse.data);
-
+          const importCostResponse = await axios.get('/api/reports/total-import-cost', {
+            params: {
+              ...getWarehouseQuery()
+            }
+          });
           if (importCostResponse.data?.success && importCostResponse.data.totalCostVND) {
             totalCost = importCostResponse.data.totalCostVND;
-            console.log('✅ Backup calculation successful from ImportReceipts!');
-            console.log('Total Cost USD from ImportReceipts:', importCostResponse.data.totalCostUSD);
-            console.log('Total Cost VND from ImportReceipts:', totalCost);
-            console.log('Total ImportReceipts:', importCostResponse.data.totalReceipts);
           } else {
-            console.log('⚠️ Import cost API returned 0 or invalid data (no ImportReceipts found)');
+            console.log('⚠️ Import cost API returned 0 or invalid data');
           }
         } catch (backupError) {
           console.log('❌ Import cost API failed:', backupError);
         }
-
-        if (totalCost === 0) {
-          console.log('ℹ️ No ImportReceipts found, total cost remains 0');
-        }
       }
 
-      // Assign summary as original
       cashFlowSummary.value = {
         totalRevenue: totalRevenue,
-        totalCost: totalCost, // already converted to VND
+        totalCost: totalCost,
         totalProfit: totalRevenue - totalCost,
       };
 
-      console.log('✅ FINAL RESULTS:');
-      console.log('📊 Total Revenue from finalAmount:', totalRevenue);
-      console.log('💰 Total Cost (converted to VND):', totalCost);
-      console.log('📈 Total Profit:', totalRevenue - totalCost);
-      console.log('🔍 Revenue source: Invoice.finalAmount (final price after markup)');
-      console.log('🔍 Cost source: ImportReceipt.details (unitPrice * quantity when imported, converted USD to VND)');
-
-      // ---- NEW: If API returned a time-series (e.g., data.series), try to extract it ----
+      // Try to parse series if provided
       try {
         const data = cashFlowResponse.data?.data || cashFlowResponse.data;
-        // possible shapes: data.series OR data.history OR data.data.series
         let rawSeries = null;
         if (data?.series && Array.isArray(data.series)) rawSeries = data.series;
         else if (data?.history && Array.isArray(data.history)) rawSeries = data.history;
@@ -530,14 +474,12 @@ const fetchCashFlow = async () => {
 
         if (rawSeries) {
           cashFlowSeries.value = rawSeries.map(item => {
-            // best-effort mapping: item may contain revenueUSD/costUSD or revenue/cost already in VND
-            const revUSD = safeNumber(item.revenue || item.totalRevenue || item.revenueUSD || 0);
-            const costUSD = safeNumber(item.cost || item.totalCost || item.costUSD || 0);
-            // If values look too big (likely already VND), assume VND and don't convert
-            const revenueVND = revUSD > 1000000 ? Math.round(revUSD) : Math.round(revUSD * USD_TO_VND_RATE);
-            const costVND = costUSD > 1000000 ? Math.round(costUSD) : Math.round(costUSD * USD_TO_VND_RATE);
+            const rev = safeNumber(item.revenue || item.totalRevenue || item.revenueUSD || 0);
+            const cost = safeNumber(item.cost || item.totalCost || item.costUSD || 0);
+            const revenueVND = rev > 1000000 ? Math.round(rev) : Math.round(rev * USD_TO_VND_RATE);
+            const costVND = cost > 1000000 ? Math.round(cost) : Math.round(cost * USD_TO_VND_RATE);
             return {
-              label: item.label || item.month || item.period || (item.year && item.month ? `${item.year}-${String(item.month).padStart(2,'0')}` : ''),
+              label: item.label || item.month || item.period || (item.year && item.month ? `${item.month}/${item.year}` : ''),
               revenueVND,
               costVND
             };
@@ -549,13 +491,11 @@ const fetchCashFlow = async () => {
         console.log('Could not parse series from cashFlowResponse:', e);
         cashFlowSeries.value = [];
       }
-
     } else {
       throw new Error('Total revenue API response not successful');
     }
   } catch (error) {
     console.error('Error fetching cash flow:', error);
-    // Fallback data
     cashFlowSummary.value = {
       totalRevenue: 0,
       totalCost: 0,
@@ -564,15 +504,45 @@ const fetchCashFlow = async () => {
     cashFlowSeries.value = [];
   } finally {
     isLoadingCashFlow.value = false;
+    await nextTick();
+    renderCashFlowChart();
   }
 };
 
-// fetchInventoryValue (kept almost original, still builds inventorySeries used for chart)
+const fetchCashFlowTimeSeries = async () => {
+  try {
+    const response = await axios.get('/api/reports/cash-flow-time-series', {
+      params: {
+        period: chartFilters.value.period,
+        year: chartFilters.value.year,
+        month: chartFilters.value.month,
+        ...getWarehouseQuery()
+      }
+    });
+
+    if (response.data?.success && response.data.data) {
+      cashFlowSeries.value = response.data.data.series || [];
+      renderCashFlowChart();
+      updateSummaryFromSeries();
+    } else {
+      cashFlowSeries.value = [];
+      renderCashFlowChart();
+    }
+  } catch (error) {
+    console.error('Error fetching cash flow time series:', error);
+    cashFlowSeries.value = [];
+    renderCashFlowChart();
+  }
+};
+
 const fetchInventoryValue = async () => {
   try {
     isLoadingInventory.value = true;
-    // Use FIFO-based ending inventory from backend
-    const response = await axios.get('/api/reports/inventory-value-fifo');
+    const response = await axios.get('/api/reports/inventory-value-fifo', {
+      params: {
+        ...getWarehouseQuery()
+      }
+    });
 
     if (response.data?.success && response.data.data?.summary) {
       inventorySummary.value = {
@@ -602,29 +572,35 @@ const fetchInventoryValue = async () => {
     inventorySeries.value = [];
   } finally {
     isLoadingInventory.value = false;
+    await nextTick();
+    renderInventoryChart();
   }
 };
 
-// Refresh all data
-const refreshData = async () => {
+// Refresh helper - choose which sections to refresh (defaults: all)
+const refreshCharts = async (sections = {}) => {
+  const {
+    topProducts: shouldRefreshTopProducts = true,
+    cashSummary: shouldRefreshCashSummary = true,
+    cashSeries: shouldRefreshCashSeries = true,
+    inventory: shouldRefreshInventory = true
+  } = sections;
+
   try {
-    isRefreshing.value = true;
-    await Promise.all([
-      fetchTopProducts(),
-      fetchCashFlow(), // keep original API for summary data
-      fetchInventoryValue()
-    ]);
-    // Fetch line chart data separately
-    await fetchCashFlowTimeSeries();
+    const tasks = [];
+    if (shouldRefreshTopProducts) tasks.push(fetchTopProducts());
+    if (shouldRefreshCashSummary) tasks.push(fetchCashFlow());
+    if (shouldRefreshInventory) tasks.push(fetchInventoryValue());
+    await Promise.all(tasks);
+    if (shouldRefreshCashSeries) {
+      await fetchCashFlowTimeSeries();
+    }
   } catch (error) {
-    console.error('Error refreshing data:', error);
-  } finally {
-    isRefreshing.value = false;
+    console.error('Error refreshing charts:', error);
   }
 };
 
-// ----------------- CHART RENDERERS -----------------
-
+// ----------------- CHART RENDERERS (safe update: update if exists) -----------------
 const palette = {
   gold: '#F59E0B',
   gray: '#9CA3AF',
@@ -638,6 +614,7 @@ const palette = {
 // Top products chart (horizontal bar)
 const renderTopProductsChart = () => {
   if (!topProductsChartRef.value) return;
+
   const labels = topProducts.value.slice(0, 10).map(p => p.name);
   const dataValues = topProducts.value.slice(0, 10).map(p => p.totalQuantity || 0);
   const bg = dataValues.map((_, i) => {
@@ -647,31 +624,28 @@ const renderTopProductsChart = () => {
     return palette.blue;
   });
 
+  const datasets = [{ label: 'Sold', data: dataValues, backgroundColor: bg, borderRadius: 8, barThickness: 16 }];
+
   const cfg = {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{ label: 'Sold', data: dataValues, backgroundColor: bg, borderRadius: 8, barThickness: 16 }]
-    },
+    data: { labels, datasets },
     options: {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${formatNumber(ctx.parsed.x)} sold` } }
-      },
-      scales: {
-        x: { beginAtZero: true, ticks: { callback: v => formatNumber(v) } },
-        y: { ticks: { autoSkip: false } }
-      }
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${formatNumber(ctx.parsed.x)} sold` } } },
+      scales: { x: { beginAtZero: true, ticks: { callback: v => formatNumber(v) } }, y: { ticks: { autoSkip: false } } }
     }
   };
 
   if (topProductsChart) {
-    topProductsChart.destroy();
-    topProductsChart = null;
+    // update in-place
+    topProductsChart.data.labels = labels;
+    topProductsChart.data.datasets = datasets;
+    topProductsChart.update();
+    return;
   }
+
   topProductsChart = new Chart(topProductsChartRef.value.getContext('2d'), cfg);
 };
 
@@ -680,149 +654,58 @@ const compareFilters = ref({ yearA: '2024', yearB: '2025' });
 const compareSeriesA = ref([]); // series for yearA (12 months)
 const compareSeriesB = ref([]); // series for yearB (12 months)
 
-const refreshCompareChart = async () => {
-  await fetchCompareSeries();
-  renderCashFlowCombinedChart();
-};
-
-const fetchCompareSeries = async () => {
-  try {
-    isLoadingCompareChart.value = true;
-    const yearA = compareFilters.value.yearA;
-    const yearB = compareFilters.value.yearB;
-
-    console.log(`🔄 Fetching comparison data for ${yearA} vs ${yearB}...`);
-
-    const [resA, resB] = await Promise.all([
-      axios.get('/api/reports/cash-flow-time-series', { params: { period: 'month', year: yearA } }),
-      axios.get('/api/reports/cash-flow-time-series', { params: { period: 'month', year: yearB } })
-    ]);
-
-    compareSeriesA.value = Array.isArray(resA.data?.data?.series) ? resA.data.data.series : [];
-    compareSeriesB.value = Array.isArray(resB.data?.data?.series) ? resB.data.data.series : [];
-
-    console.log(`✅ Comparison data loaded: ${compareSeriesA.value.length} months for ${yearA}, ${compareSeriesB.value.length} months for ${yearB}`);
-  } catch (e) {
-    console.error('Error fetching compare series:', e);
-    compareSeriesA.value = [];
-    compareSeriesB.value = [];
-  } finally {
-    isLoadingCompareChart.value = false;
-  }
-};
-
 const renderCashFlowChart = () => {
   if (!cashFlowChartRef.value) return;
 
-  // Generate labels for 12 months
   const labels = generateMonthLabels(chartFilters.value.year);
 
-  // Generate sample data for 3 lines
   const sampleData = generateSampleData();
 
-  // If we have real data from API, use it; otherwise use sample data
   let revenueData, costData, netProfitData;
 
   if (cashFlowSeries.value && cashFlowSeries.value.length >= 12) {
-    // Use real data from API
     revenueData = cashFlowSeries.value.slice(0, 12).map(item => safeNumber(item.revenueVND || 0));
     costData = cashFlowSeries.value.slice(0, 12).map(item => safeNumber(item.costVND || 0));
-    netProfitData = revenueData.map((rev, i) => rev - costData[i]);
+    netProfitData = revenueData.map((rev, i) => rev - (costData[i] || 0));
   } else {
-    // Use sample data
     revenueData = sampleData.revenue;
     costData = sampleData.cost;
     netProfitData = sampleData.netProfit;
   }
 
+  const datasets = [
+    { label: 'Revenue', data: revenueData, tension: 0.3, fill: false, borderColor: '#10B981', backgroundColor: '#10B981', pointRadius: 4, pointHoverRadius: 6, borderWidth: 3 },
+    { label: 'Cost', data: costData, tension: 0.3, fill: false, borderColor: '#EF4444', backgroundColor: '#EF4444', pointRadius: 4, pointHoverRadius: 6, borderWidth: 3 },
+    { label: 'Net Profit', data: netProfitData, tension: 0.3, fill: false, borderColor: '#3B82F6', backgroundColor: '#3B82F6', pointRadius: 4, pointHoverRadius: 6, borderWidth: 3 }
+  ];
+
   const cfg = {
     type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Revenue',
-          data: revenueData,
-          tension: 0.3,
-          fill: false,
-          borderColor: '#10B981', // Green
-          backgroundColor: '#10B981',
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          borderWidth: 3
-        },
-        {
-          label: 'Cost',
-          data: costData,
-          tension: 0.3,
-          fill: false,
-          borderColor: '#EF4444', // Red
-          backgroundColor: '#EF4444',
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          borderWidth: 3
-        },
-        {
-          label: 'Net Profit',
-          data: netProfitData,
-          tension: 0.3,
-          fill: false,
-          borderColor: '#3B82F6', // Blue
-          backgroundColor: '#3B82F6',
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          borderWidth: 3
-        }
-      ]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const v = ctx.parsed.y;
-              return `${ctx.dataset.label}: ${formatCurrency(v)}`;
-            }
-          }
+          callbacks: { label: (ctx) => { const v = ctx.parsed.y; return `${ctx.dataset.label}: ${formatCurrency(v)}`; } }
         },
-        legend: {
-          display: true,
-          position: 'top',
-          labels: {
-            usePointStyle: true,
-            padding: 20
-          }
-        }
+        legend: { display: true, position: 'top', labels: { usePointStyle: true, padding: 20 } }
       },
       scales: {
-        x: {
-          grid: {
-            display: true,
-            color: '#f3f4f6'
-          }
-        },
-        y: {
-          ticks: {
-            callback: v => formatCurrency(v),
-            maxTicksLimit: 8
-          },
-          beginAtZero: false,
-          grid: {
-            display: true,
-            color: '#f3f4f6'
-          }
-        }
+        x: { grid: { display: true, color: '#f3f4f6' } },
+        y: { ticks: { callback: v => formatCurrency(v), maxTicksLimit: 8 }, beginAtZero: false, grid: { display: true, color: '#f3f4f6' } }
       }
     }
   };
 
   if (cashFlowChart) {
-    cashFlowChart.destroy();
-    cashFlowChart = null;
+    cashFlowChart.data.labels = labels;
+    cashFlowChart.data.datasets = datasets;
+    cashFlowChart.update();
+    return;
   }
+
   cashFlowChart = new Chart(cashFlowChartRef.value.getContext('2d'), cfg);
 };
 
@@ -830,7 +713,6 @@ const renderCashFlowChart = () => {
 const renderCashFlowCombinedChart = () => {
   if (!cashFlowCombinedChartRef.value) return;
 
-  // Use monthly data for two selected years
   const seriesA = compareSeriesA.value || [];
   const seriesB = compareSeriesB.value || [];
   const labels = Array.from({ length: 12 }, (_, i) => `Mon ${i + 1}`);
@@ -841,70 +723,17 @@ const renderCashFlowCombinedChart = () => {
   const profitPctA = revenueA.map((rev, i) => (rev > 0 ? ((rev - costA[i]) / rev) * 100 : 0));
   const profitPctB = revenueB.map((rev, i) => (rev > 0 ? ((rev - costB[i]) / rev) * 100 : 0));
 
+  const datasets = [
+    { type: 'bar', label: `Revenue ${compareFilters.value.yearA}`, data: revenueA, backgroundColor: '#10B981', borderRadius: 6, yAxisID: 'y' },
+    { type: 'bar', label: `Cost ${compareFilters.value.yearA}`, data: costA, backgroundColor: '#EF4444', borderRadius: 6, yAxisID: 'y' },
+    { type: 'bar', label: `Revenue ${compareFilters.value.yearB}`, data: revenueB, backgroundColor: '#34D399', borderRadius: 6, yAxisID: 'y' },
+    { type: 'bar', label: `Cost ${compareFilters.value.yearB}`, data: costB, backgroundColor: '#F87171', borderRadius: 6, yAxisID: 'y' },
+    { type: 'line', label: `Profit % ${compareFilters.value.yearA}`, data: profitPctA, borderColor: '#3B82F6', backgroundColor: '#3B82F6', yAxisID: 'y1', tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, fill: false },
+    { type: 'line', label: `Profit % ${compareFilters.value.yearB}`, data: profitPctB, borderColor: '#6366F1', backgroundColor: '#6366F1', yAxisID: 'y1', tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, fill: false }
+  ];
+
   const cfg = {
-    data: {
-      labels,
-      datasets: [
-        {
-          type: 'bar',
-          label: `Revenue ${compareFilters.value.yearA}`,
-          data: revenueA,
-          backgroundColor: '#10B981',
-          borderRadius: 6,
-          yAxisID: 'y'
-        },
-        {
-          type: 'bar',
-          label: `Cost ${compareFilters.value.yearA}`,
-          data: costA,
-          backgroundColor: '#EF4444',
-          borderRadius: 6,
-          yAxisID: 'y'
-        },
-        {
-          type: 'bar',
-          label: `Revenue ${compareFilters.value.yearB}`,
-          data: revenueB,
-          backgroundColor: '#34D399',
-          borderRadius: 6,
-          yAxisID: 'y'
-        },
-        {
-          type: 'bar',
-          label: `Cost ${compareFilters.value.yearB}`,
-          data: costB,
-          backgroundColor: '#F87171',
-          borderRadius: 6,
-          yAxisID: 'y'
-        },
-        {
-          type: 'line',
-          label: `Profit % ${compareFilters.value.yearA}`,
-          data: profitPctA,
-          borderColor: '#3B82F6',
-          backgroundColor: '#3B82F6',
-          yAxisID: 'y1',
-          tension: 0.3,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          borderWidth: 2,
-          fill: false
-        },
-        {
-          type: 'line',
-          label: `Profit % ${compareFilters.value.yearB}`,
-          data: profitPctB,
-          borderColor: '#6366F1',
-          backgroundColor: '#6366F1',
-          yAxisID: 'y1',
-          tension: 0.3,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          borderWidth: 2,
-          fill: false
-        }
-      ]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -923,39 +752,23 @@ const renderCashFlowCombinedChart = () => {
             }
           }
         },
-        legend: {
-          display: true,
-          position: 'top',
-          labels: { usePointStyle: true, padding: 20 }
-        }
+        legend: { display: true, position: 'top', labels: { usePointStyle: true, padding: 20 } }
       },
       scales: {
-        y: {
-          type: 'linear',
-          position: 'left',
-          ticks: { callback: v => formatCurrency(v), maxTicksLimit: 6 },
-          grid: { color: '#f3f4f6' }
-        },
-        y1: {
-          type: 'linear',
-          position: 'right',
-          ticks: {
-            callback: v => `${Number(v).toFixed(0)}%`,
-            maxTicksLimit: 6
-          },
-          grid: { drawOnChartArea: false }
-        },
-        x: {
-          grid: { color: '#f9fafb' }
-        }
+        y: { type: 'linear', position: 'left', ticks: { callback: v => formatCurrency(v), maxTicksLimit: 6 }, grid: { color: '#f3f4f6' } },
+        y1: { type: 'linear', position: 'right', ticks: { callback: v => `${Number(v).toFixed(0)}%`, maxTicksLimit: 6 }, grid: { drawOnChartArea: false } },
+        x: { grid: { color: '#f9fafb' } }
       }
     }
   };
 
   if (cashFlowCombinedChart) {
-    cashFlowCombinedChart.destroy();
-    cashFlowCombinedChart = null;
+    cashFlowCombinedChart.data.labels = cfg.data.labels;
+    cashFlowCombinedChart.data.datasets = cfg.data.datasets;
+    cashFlowCombinedChart.update();
+    return;
   }
+
   cashFlowCombinedChart = new Chart(cashFlowCombinedChartRef.value.getContext('2d'), cfg);
 };
 
@@ -965,140 +778,348 @@ const renderInventoryChart = () => {
   const labels = inventorySeries.value.map(s => s.label || '');
   const values = inventorySeries.value.map(s => s.valueVND || 0);
 
+  const datasets = [
+    { label: 'Inventory Value', data: values, tension: 0.25, fill: true, borderColor: palette.inventory, backgroundColor: 'rgba(124,58,237,0.08)', pointRadius: 3, pointHoverRadius: 6 }
+  ];
+
   const cfg = {
     type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Inventory Value',
-          data: values,
-          tension: 0.25,
-          fill: true,
-          borderColor: palette.inventory,
-          backgroundColor: 'rgba(124,58,237,0.08)',
-          pointRadius: 3,
-          pointHoverRadius: 6
-        }
-      ]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        tooltip: {
-          callbacks: { label: ctx => `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y)}` }
-        }
-      },
-      scales: {
-        y: { ticks: { callback: v => formatCurrency(v) } }
-      }
+      plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y)}` } } },
+      scales: { y: { ticks: { callback: v => formatCurrency(v) } } }
     }
   };
 
   if (inventoryChart) {
-    inventoryChart.destroy();
-    inventoryChart = null;
+    inventoryChart.data.labels = labels;
+    inventoryChart.data.datasets = datasets;
+    inventoryChart.update();
+    return;
   }
+
   inventoryChart = new Chart(inventoryChartRef.value.getContext('2d'), cfg);
 };
 
-// Watchers & lifecycle
+// ----------------- Incremental update helpers (for realtime events) -----------------
+
+// Helper: convert invoice payload amount to VND
+const amountToVND = (value, currency) => {
+  const n = safeNumber(value);
+  if (!currency) {
+    // fallback: if number small assume USD else VND (heuristic)
+    return n > 1000000 ? Math.round(n) : Math.round(n * USD_TO_VND_RATE);
+  }
+  return currency.toUpperCase() === 'USD' ? Math.round(n * USD_TO_VND_RATE) : Math.round(n);
+};
+
+// Map invoice date to chart label used in cashFlowSeries (best-effort)
+const invoiceDateToLabel = (isoDate) => {
+  try {
+    const d = new Date(isoDate);
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+    return `${month}/${year}`;
+  } catch (e) {
+    return null;
+  }
+};
+
+// Increment topProducts from invoice payload (best-effort)
+const incrementTopProductsFromInvoice = (invoice) => {
+  if (!invoice) return false;
+  const items = invoice.items || invoice.lineItems || invoice.products || [];
+  if (!Array.isArray(items) || items.length === 0) return false;
+
+  let changed = false;
+  items.forEach(it => {
+    const qty = safeNumber(it.quantity || it.qty || it.quantitySold || 0);
+    const sku = it.sku || it.productSku || null;
+    const name = it.productName || it.name || (sku ? sku : 'Unknown');
+
+    // Find in topProducts by sku or name
+    const found = topProducts.value.find(p => (sku && p.sku && p.sku === sku) || p.name === name);
+    if (found) {
+      found.totalQuantity = safeNumber(found.totalQuantity) + qty;
+      changed = true;
+    } else {
+      // push new item (may or may not belong top10, but we'll insert and then sort)
+      topProducts.value.push({ name, sku: sku || 'N/A', totalQuantity: qty });
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    // sort by totalQuantity desc and keep top 10
+    topProducts.value.sort((a, b) => safeNumber(b.totalQuantity) - safeNumber(a.totalQuantity));
+    topProducts.value = topProducts.value.slice(0, 10);
+    renderTopProductsChart();
+  }
+  return changed;
+};
+
+// Increment cash flow (revenue & net profit) from invoice
+const incrementCashFlowFromInvoice = (invoice) => {
+  if (!invoice) return false;
+  const finalAmount = invoice.finalAmount || invoice.total || invoice.amount || 0;
+  const currency = invoice.currency || invoice.currencyCode || null;
+  const dateLabel = invoiceDateToLabel(invoice.date || invoice.createdAt || invoice.updatedAt || new Date());
+
+  const addVND = amountToVND(finalAmount, currency);
+  if (!dateLabel) {
+    // if no date label, just add to summary totals
+    cashFlowSummary.value.totalRevenue = safeNumber(cashFlowSummary.value.totalRevenue) + addVND;
+    cashFlowSummary.value.totalProfit = safeNumber(cashFlowSummary.value.totalProfit) + addVND;
+    renderCashFlowChart();
+    return true;
+  }
+
+  // try to find dateLabel in cashFlowSeries
+  const idx = cashFlowSeries.value.findIndex(s => s.label === dateLabel);
+  if (idx !== -1) {
+    cashFlowSeries.value[idx].revenueVND = safeNumber(cashFlowSeries.value[idx].revenueVND) + addVND;
+    // cost unknown here -> net profit increases by addVND
+    // update summary totals
+    cashFlowSummary.value.totalRevenue = safeNumber(cashFlowSummary.value.totalRevenue) + addVND;
+    cashFlowSummary.value.totalProfit = safeNumber(cashFlowSummary.value.totalProfit) + addVND;
+    // rebuild chart dataset arrays in-place
+    if (cashFlowChart) {
+      const labels = generateMonthLabels(chartFilters.value.year);
+      cashFlowChart.data.labels = labels;
+      // dataset[0] = revenue, dataset[1] = cost, dataset[2] = netProfit
+      cashFlowChart.data.datasets[0].data = cashFlowSeries.value.slice(0,12).map(i => safeNumber(i.revenueVND || 0));
+      cashFlowChart.data.datasets[1].data = cashFlowSeries.value.slice(0,12).map(i => safeNumber(i.costVND || 0));
+      cashFlowChart.data.datasets[2].data = cashFlowChart.data.datasets[0].data.map((r, i) => r - safeNumber(cashFlowChart.data.datasets[1].data[i]));
+      cashFlowChart.update();
+    } else {
+      renderCashFlowChart();
+    }
+
+    return true;
+  } else {
+    // If series not found or empty, try to append to series if length < 12 or create/refresh fallback
+    // If series empty, we might be using sampleData -> update summary and chart using sample fallback
+    cashFlowSummary.value.totalRevenue = safeNumber(cashFlowSummary.value.totalRevenue) + addVND;
+    cashFlowSummary.value.totalProfit = safeNumber(cashFlowSummary.value.totalProfit) + addVND;
+    // fallback: just call render to reflect summary change
+    renderCashFlowChart();
+    return true;
+  }
+};
+
+// Update compare series (yearA/yearB) when invoice matches a compare year
+const incrementCompareSeriesFromInvoice = (invoice) => {
+  if (!invoice) return false;
+  const finalAmount = invoice.finalAmount || invoice.total || invoice.amount || 0;
+  const currency = invoice.currency || invoice.currencyCode || null;
+  const d = new Date(invoice.date || invoice.createdAt || invoice.updatedAt || new Date());
+  const year = String(d.getFullYear());
+  const monthIndex = d.getMonth(); // 0-based
+  const addVND = amountToVND(finalAmount, currency);
+
+  let updated = false;
+  if (year === compareFilters.value.yearA) {
+    if (!compareSeriesA.value || compareSeriesA.value.length === 0) {
+      // initialize 12 months if empty
+      compareSeriesA.value = Array.from({ length: 12 }, (_, i) => ({ label: `${i+1}/${year}`, revenueVND: 0, costVND: 0 }));
+    }
+    compareSeriesA.value[monthIndex].revenueVND = safeNumber(compareSeriesA.value[monthIndex].revenueVND) + addVND;
+    updated = true;
+  }
+  if (year === compareFilters.value.yearB) {
+    if (!compareSeriesB.value || compareSeriesB.value.length === 0) {
+      compareSeriesB.value = Array.from({ length: 12 }, (_, i) => ({ label: `${i+1}/${year}`, revenueVND: 0, costVND: 0 }));
+    }
+    compareSeriesB.value[monthIndex].revenueVND = safeNumber(compareSeriesB.value[monthIndex].revenueVND) + addVND;
+    updated = true;
+  }
+  if (updated) renderCashFlowCombinedChart();
+  return updated;
+};
+
+// Inventory: optionally decrease inventory on invoice (not always safe) -> we'll skip to avoid inaccuracies
+// If payload contains inventory delta, you can implement similarly.
+
+
+// ----------------- Fetch comparison & render -----------------
+const fetchCompareSeries = async () => {
+  try {
+    isLoadingCompareChart.value = true;
+    const yearA = compareFilters.value.yearA;
+    const yearB = compareFilters.value.yearB;
+
+    const [resA, resB] = await Promise.all([
+      axios.get('/api/reports/cash-flow-time-series', { params: { period: 'month', year: yearA, ...getWarehouseQuery() } }),
+      axios.get('/api/reports/cash-flow-time-series', { params: { period: 'month', year: yearB, ...getWarehouseQuery() } })
+    ]);
+
+    compareSeriesA.value = Array.isArray(resA.data?.data?.series) ? resA.data.data.series : [];
+    compareSeriesB.value = Array.isArray(resB.data?.data?.series) ? resB.data.data.series : [];
+  } catch (e) {
+    console.error('Error fetching compare series:', e);
+    compareSeriesA.value = [];
+    compareSeriesB.value = [];
+  } finally {
+    isLoadingCompareChart.value = false;
+    await nextTick();
+    renderCashFlowCombinedChart();
+  }
+};
+
+const refreshCompareChart = async () => {
+  await fetchCompareSeries();
+  // render called by fetchCompareSeries
+};
+
+// ----------------- WATCHERS -----------------
+// Keep watchers only for initial render/update but avoid destroy/create cycles
 watch(topProducts, () => renderTopProductsChart(), { deep: true });
-watch(cashFlowSummary, () => renderCashFlowChart(), { deep: true }); // total-based fallback
-watch(cashFlowSeries, () => renderCashFlowChart(), { deep: true }); // series-based update
-watch(cashFlowSeries, () => renderCashFlowCombinedChart(), { deep: true });
-watch(chartFilters, () => updateSummaryFromSeries(), { deep: true });
+watch(cashFlowSeries, () => renderCashFlowChart(), { deep: true });
 watch(inventorySeries, () => renderInventoryChart(), { deep: true });
 
-// Socket.IO initialization
+// ----------------- SOCKET (real-time) -----------------
 const initializeSocket = () => {
   console.log('🚀 Initializing Socket.IO for Accounter Dashboard...');
 
-  // Connect to Socket.IO
   const socket = socketService.connect();
-
-  // Join accounter room
-  if (socket) {
-    console.log('🏠 Joining accounter room...');
-    socket.emit('join-room', 'accounters');
-  } else {
+  if (!socket) {
     console.warn('⚠️ Socket not available, charts will not update in real-time');
+    return;
   }
 
-  // Listen for chart data updates
-  socketService.on('chart-data-updated', (data) => {
-    console.log('📊 Accounter Dashboard - Chart data updated:', data);
+  socket.emit('join-room', 'accounters');
 
-    // Refresh all charts based on update type
-    if (data.type === 'invoice' || data.type === 'all') {
-      console.log('📊 Refreshing invoice data...');
-      refreshData();
-      // Also refresh comparison chart for real-time updates
+  socket.on('connect', () => console.log('✅ Socket.IO connected for Accounter Dashboard'));
+  socket.on('disconnect', () => console.log('❌ Socket.IO disconnected for Accounter Dashboard'));
+
+  // Primary listener: chart-data-updated (generic)
+  socketService.on('chart-data-updated', (data) => {
+    console.log('📊 chart-data-updated', data);
+    // If backend gives type + payload, we try to do incremental update
+    try {
+      if (data?.type === 'invoice' && data?.payload) {
+        const invoice = data.payload;
+        const p1 = incrementTopProductsFromInvoice(invoice);
+        const p2 = incrementCashFlowFromInvoice(invoice);
+        const p3 = incrementCompareSeriesFromInvoice(invoice);
+        // if none of incremental succeeded, fallback to refresh
+        if (!p1 && !p2 && !p3) {
+          refreshCharts();
+          refreshCompareChart();
+        }
+        return;
+      } else if (data?.type === 'products' && data?.payload) {
+        // payload may contain product updates; refresh top products incremental
+        fetchTopProducts(); // safe small call; or attempt incremental if payload structured
+        return;
+      } else if (data?.type === 'inventory' && data?.payload) {
+        // for inventory updates, fetch inventory series
+        fetchInventoryValue();
+        return;
+      }
+    } catch (e) {
+      console.error('Error handling chart-data-updated payload:', e);
+    }
+    // Generic fallback: refresh all
+    refreshCharts();
+    refreshCompareChart();
+  });
+
+  // Invoice events — do incremental updates when possible
+  socketService.on('invoice-approved', (payload) => {
+    console.log('✅ invoice-approved', payload);
+    // payload ideally contains the invoice detail
+    if (payload && (payload.items || payload.finalAmount || payload.total)) {
+      const invoice = payload;
+      const done1 = incrementTopProductsFromInvoice(invoice);
+      const done2 = incrementCashFlowFromInvoice(invoice);
+      const done3 = incrementCompareSeriesFromInvoice(invoice);
+      if (!done1 && !done2 && !done3) {
+        // fallback: refresh
+        refreshCharts();
+        refreshCompareChart();
+      }
+    } else {
+      // fallback if payload not detailed
+      refreshCharts();
       refreshCompareChart();
     }
-    if (data.type === 'inventory' || data.type === 'all') {
-      console.log('📊 Refreshing inventory data...');
-      fetchInventoryValue();
+  });
+
+  // For created/updated/deleted invoice events we try to be smart:
+  socketService.on('invoice-created', (payload) => {
+    console.log('📄 invoice-created', payload);
+    // treat similar to approved (increment revenue & products)
+    if (payload) {
+      const invoice = payload;
+      incrementTopProductsFromInvoice(invoice);
+      incrementCashFlowFromInvoice(invoice);
+      incrementCompareSeriesFromInvoice(invoice);
+    } else {
+      refreshCharts({ topProducts: true, cashSummary: true, cashSeries: true, inventory: false });
     }
-    if (data.type === 'products' || data.type === 'all') {
-      console.log('📊 Refreshing products data...');
-      fetchTopProducts();
+  });
+
+  socketService.on('invoice-deleted', (payload) => {
+    console.log('🗑️ invoice-deleted', payload);
+    // safer to refresh full data on delete to avoid negative/inconsistent adjustments
+    refreshCharts();
+    refreshCompareChart();
+  });
+
+  socketService.on('invoice-rejected', (payload) => {
+    console.log('❌ invoice-rejected', payload);
+    // rejected invoices shouldn't affect totals; refresh to be safe
+    refreshCharts();
+    refreshCompareChart();
+  });
+
+  socketService.on('invoice-status-changed', (data) => {
+    console.log('🔄 invoice-status-changed', data);
+    // if status changed to approved -> handle as approved; else refresh
+    if (data?.status === 'approved' && data?.payload) {
+      incrementTopProductsFromInvoice(data.payload);
+      incrementCashFlowFromInvoice(data.payload);
+      incrementCompareSeriesFromInvoice(data.payload);
+    } else {
+      refreshCharts();
+      refreshCompareChart();
     }
   });
 
-  // Listen for invoice events
-  socketService.on('invoice-created', () => {
-    console.log('📄 Accounter Dashboard - Invoice created - refreshing charts');
-    refreshData();
-    refreshCompareChart();
-  });
-
-  socketService.on('invoice-deleted', () => {
-    console.log('🗑️ Accounter Dashboard - Invoice deleted - refreshing charts');
-    refreshData();
-    refreshCompareChart();
-  });
-
-  socketService.on('invoice-approved', () => {
-    console.log('✅ Accounter Dashboard - Invoice approved - refreshing charts');
-    refreshData();
-    refreshCompareChart();
-  });
-
-  socketService.on('invoice-rejected', () => {
-    console.log('❌ Accounter Dashboard - Invoice rejected - refreshing charts');
-    refreshData();
-    refreshCompareChart();
-  });
-
-  // Listen for export events
+  // Exports / products / general data updates -> partial refresh
   socketService.on('export-created', () => {
-    console.log('📦 Accounter Dashboard - Export created - refreshing charts');
-    refreshData();
-    refreshCompareChart();
+    console.log('📦 export-created');
+    refreshCharts({ topProducts: true, cashSummary: true, cashSeries: true, inventory: false });
   });
 
   socketService.on('export-approved', () => {
-    console.log('✅ Accounter Dashboard - Export approved - refreshing charts');
-    refreshData();
-    refreshCompareChart();
+    console.log('✅ export-approved');
+    refreshCharts({ topProducts: true, cashSummary: true, cashSeries: true, inventory: false });
+  });
+
+  socketService.on('data-updated', (data) => {
+    console.log('📊 data-updated', data);
+    // If backend gives granular type, handle accordingly, otherwise refresh
+    if (data?.resource === 'product') {
+      fetchTopProducts();
+    } else if (data?.resource === 'inventory') {
+      refreshCharts({ topProducts: false, cashSummary: false, cashSeries: false, inventory: true });
+    } else {
+      refreshCharts();
+    }
   });
 };
 
-// Auto-refresh function for real-time updates
+// Auto-refresh function for real-time updates (kept but optional)
 const startAutoRefresh = () => {
-  // Clear existing interval if any
-  if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-  }
-
-  // Set up auto-refresh every 30 seconds for comparison chart
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
     console.log('🔄 Auto-refreshing comparison chart...');
     refreshCompareChart();
-  }, 30000); // 30 seconds
-
+  }, 30000);
   console.log('⏰ Auto-refresh started for comparison chart (30s interval)');
 };
 
@@ -1110,34 +1131,69 @@ const stopAutoRefresh = () => {
   }
 };
 
-onMounted(async () => {
-  // Initialize Socket.IO connection
-  initializeSocket();
+// Cleanup socket listeners safely
+const cleanupSocket = () => {
+  try {
+    console.log('🧹 Cleaning up AccounterDashboard socket listeners...');
+    // Use socketService.off() for proper cleanup
+    socketService.off('chart-data-updated');
+    socketService.off('invoice-created');
+    socketService.off('invoice-deleted');
+    socketService.off('invoice-approved');
+    socketService.off('invoice-rejected');
+    socketService.off('invoice-status-changed');
+    socketService.off('export-created');
+    socketService.off('export-approved');
+    socketService.off('data-updated');
+    console.log('✅ AccounterDashboard socket listeners cleaned up successfully');
+  } catch (e) {
+    console.warn('⚠️ Error cleaning up AccounterDashboard socket listeners:', e);
+  }
+};
 
-  await refreshData();
+// Lifecycle
+onMounted(async () => {
+  initializeSocket();
+  await refreshCharts();
   await fetchCompareSeries();
+  // render charts (will update in-place)
   renderTopProductsChart();
   renderCashFlowChart();
   renderCashFlowCombinedChart();
   renderInventoryChart();
   updateSummaryFromSeries();
-
-  // Start auto-refresh for real-time updates
   startAutoRefresh();
 });
 
 onBeforeUnmount(() => {
-  // Stop auto-refresh
   stopAutoRefresh();
-
-  // Disconnect Socket.IO
-  socketService.disconnect();
+  cleanupSocket();
 
   if (topProductsChart) { topProductsChart.destroy(); topProductsChart = null; }
   if (cashFlowChart) { cashFlowChart.destroy(); cashFlowChart = null; }
   if (cashFlowCombinedChart) { cashFlowCombinedChart.destroy(); cashFlowCombinedChart = null; }
   if (inventoryChart) { inventoryChart.destroy(); inventoryChart = null; }
 });
+
+// Recalculate summary boxes from series based on current filters
+const updateSummaryFromSeries = () => {
+  const period = chartFilters.value.period;
+  if (!cashFlowSeries.value || cashFlowSeries.value.length === 0) return;
+
+  if (period === 'year') {
+    const selectedYear = Number(chartFilters.value.year);
+    const yearItem = cashFlowSeries.value.find(item =>
+      Number(item.period) === selectedYear ||
+      (item.label && item.label.includes(String(selectedYear)))
+    );
+
+    const totalRevenue = yearItem?.revenueVND ? safeNumber(yearItem.revenueVND) : 0;
+    const totalCost = yearItem?.costVND ? safeNumber(yearItem.costVND) : 0;
+    const totalProfit = totalRevenue - totalCost;
+
+    cashFlowSummary.value = { totalRevenue, totalCost, totalProfit };
+  }
+};
 </script>
 
 <style scoped>
@@ -1151,3 +1207,4 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 </style>
+

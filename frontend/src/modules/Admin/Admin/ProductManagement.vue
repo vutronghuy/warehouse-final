@@ -395,7 +395,7 @@ export default {
   },
   mounted() {
     // Set axios baseURL
-    axios.defaults.baseURL = 'http://localhost:3001';
+    axios.defaults.baseURL = 'http://localhost:3003';
 
     // Ensure Authorization header exists if token present
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');

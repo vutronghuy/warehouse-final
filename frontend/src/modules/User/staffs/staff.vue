@@ -24,7 +24,7 @@
                 {{ unreadExportCount }}
               </span>
 
-              <!-- Indicator chấm xanh -->
+              <!-- New indicator dot -->
               <span
                 v-if="(showNewNotice && !isNotifOpen) || unreadExportCount > 0"
                 class="absolute -bottom-1 -right-1 block w-2 h-2 bg-green-500 rounded-full animate-pulse"
@@ -44,7 +44,7 @@
                 v-if="isNotifOpen"
                 class="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50"
               >
-                <div class="px-4 py-2 text-sm font-semibold text-gray-700">Thông báo</div>
+                <div class="px-4 py-2 text-sm font-semibold text-gray-700">Notifications</div>
 
                 <!-- Real-time Notifications -->
                 <div
@@ -61,7 +61,7 @@
                     "
                     class="px-4 py-2 text-xs font-medium text-gray-600 bg-green-50"
                   >
-                    ✅ Thông báo mới từ Admin
+                    ✅ New notifications from Admin
                   </div>
                   <ul class="max-h-40 overflow-auto">
                     <li
@@ -81,12 +81,12 @@
                         <div class="flex items-center gap-2">
                           <span
                             class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 animate-pulse"
-                            >Mới</span
+                            >New</span
                           >
                           <button
                             @click="deleteNotification(notification.id)"
                             class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                            title="Xóa thông báo"
+                            title="Delete notification"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path
@@ -113,7 +113,7 @@
                 <!-- Approved Exports -->
                 <div v-if="approvedExports.length > 0" class="border-b border-gray-100">
                   <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-green-50">
-                    Phiếu export đã duyệt
+                    Approved export receipts
                   </div>
                   <ul class="max-h-40 overflow-auto">
                     <li v-for="exp in approvedExports" :key="exp._id" class="px-4 py-2 hover:bg-gray-50">
@@ -129,7 +129,7 @@
                           <button
                             @click="deleteExport(exp._id)"
                             class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                            title="Xóa phiếu export"
+                            title="Delete export receipt"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path
@@ -142,7 +142,7 @@
                           </button>
                         </div>
                       </div>
-                      <div class="text-xs text-gray-500">Khách hàng: {{ exp.customerName || 'N/A' }}</div>
+                      <div class="text-xs text-gray-500">Customer: {{ exp.customerName || 'N/A' }}</div>
                       <div v-if="exp.createdAt" class="text-gray-400 mt-1">
                         📅 {{ formatTime(exp.createdAt) }}
                       </div>
@@ -154,19 +154,19 @@
                   v-if="unreadExportCount === 0 && !approvedExports.length"
                   class="px-4 py-3 text-sm text-gray-500"
                 >
-                  Không có thông báo mới
+                  No new notifications
                 </div>
 
                 <div class="px-4 py-2 border-t border-gray-100 flex justify-between">
                   <button @click="goToInvoicesTab" class="text-sm text-[#6A4C93] hover:underline">
-                    Tới tab invoices
+                    Go to invoices tab
                   </button>
                   <button
                     v-if="unreadExportCount > 0"
                     @click="markAllNotificationsAsRead"
                     class="text-sm text-gray-600 hover:text-gray-800"
                   >
-                    Đánh dấu tất cả đã đọc
+                    Mark all as read
                   </button>
                 </div>
               </div>
@@ -280,7 +280,7 @@
             :class="[
               activeTab === 'export'
                 ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover;border-gray-300',
               'whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm',
             ]"
           >
@@ -296,6 +296,17 @@
             ]"
           >
             Invoices
+          </button>
+          <button
+            @click="activeTab = 'audit-logs'"
+            :class="[
+              activeTab === 'audit-logs'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              'whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm',
+            ]"
+          >
+            Audit Logs
           </button>
         </nav>
       </div>
@@ -326,11 +337,19 @@
         <div v-if="activeTab === 'invoices'">
           <InvoiceManagement />
         </div>
+
+        <!-- Audit Logs Tab -->
+        <div v-if="activeTab === 'audit-logs'">
+          <AuditLogs />
+        </div>
       </div>
     </main>
   </div>
   <div v-if="isDropdownOpen" @click="closeDropDown" class="fixed inset-0 z-40"></div>
   <div v-if="isNotifOpen" @click="isNotifOpen = false" class="fixed inset-0 z-30"></div>
+
+  <!-- ChatBot Component -->
+  <ChatBot />
 </template>
 
 <script>
@@ -339,6 +358,8 @@ import ImportProduct from './ImportProduct.vue';
 import ImportReceiptList from './ImportReceiptList.vue';
 import ExportProduct from './ExportProduct.vue';
 import InvoiceManagement from './InvoiceManagement.vue';
+import AuditLogs from './components/AuditLogs.vue';
+import { ChatBot } from '@/components';
 import axios from 'axios';
 import { BellOutlined } from '@ant-design/icons-vue';
 import { useNotificationStore } from '@/store/modules/notification/slice';
@@ -352,6 +373,8 @@ export default {
     ImportReceiptList,
     ExportProduct,
     InvoiceManagement,
+    AuditLogs,
+    ChatBot,
     BellOutlined,
   },
   setup() {
@@ -428,7 +451,7 @@ export default {
         .slice(0, 2);
     },
     unreadExportCount() {
-      // Chỉ đếm notifications về export được approve
+      // Count only notifications about export approvals
       return this.notificationStore.notifications.filter(
         (notification) => notification.type === 'export_approved' && !notification.read,
       ).length;
@@ -503,7 +526,7 @@ export default {
       this.notificationStore.deleteNotification(notificationId);
     },
     deleteExport(exportId) {
-      // Xóa export khỏi danh sách approved
+      // Remove export from approved list
       this.approvedExports = this.approvedExports.filter((exp) => exp._id !== exportId);
     },
     formatTime(timestamp) {
@@ -511,10 +534,10 @@ export default {
       const time = new Date(timestamp);
       const diffInMinutes = Math.floor((now - time) / (1000 * 60));
 
-      if (diffInMinutes < 1) return 'Vừa xong';
-      if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
-      return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+      if (diffInMinutes < 1) return 'Just now';
+      if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+      return `${Math.floor(diffInMinutes / 1440)} days ago`;
     },
     goToInvoicesTab() {
       this.activeTab = 'invoices';
@@ -595,7 +618,7 @@ export default {
         this.hasViewedNotifications = false;
       });
 
-      // Nếu Socket.IO không khả dụng, fallback về polling
+      // If Socket.IO is not available, fallback to polling
       if (!socket || socketService.isFallbackMode()) {
         console.log('🔄 Socket.IO not available, using polling fallback');
         this.enablePollingFallback();
@@ -603,7 +626,7 @@ export default {
     },
 
     enablePollingFallback() {
-      // Fallback polling mỗi 30 giây thay vì 15 giây
+      // Fallback polling every 30 seconds instead of 15 seconds
       this.pollTimer = setInterval(() => {
         this.fetchApprovedExports();
       }, 30000);
@@ -673,3 +696,4 @@ export default {
   background-color: rgba(0, 0, 0, 0.05);
 }
 </style>
+

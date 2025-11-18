@@ -14,7 +14,7 @@ import WarehouseTable from '@/modules/Admin/admin_super/Warehouse/WarehouseTable
 import Login from '@/modules/Auth/Login.vue';
 import Admin from '@/modules/Admin/Admin/Admin.vue';
 import Manager from '@/modules/User/managers/manager.vue';
-import Accounter from '@/modules/User/accounters/accounter.vue';
+import Accounter from '@/modules/User/accounters/accounterHeader.vue';
 import Staff from '@/modules/User/staffs/staff.vue';
 import EnterEmail from '@/modules/Forgot/EnterEmail.vue';
 import EnterOTP from '@/modules/Forgot/EnterOTP.vue';
@@ -165,6 +165,20 @@ const routes: RouteRecordRaw[] = [
     component: Accounter,
     meta: { layout: 'defaultNoHeader' },
     beforeEnter: requireRole(['accounter']), // Chỉ accounter vào được
+  },
+  {
+    path: '/accounter/invoices-review',
+    name: 'AccounterInvoicesReview',
+    component: () => import('../modules/User/accounters/InvoiceReview.vue'),
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireRole(['accounter']),
+  },
+  {
+    path: '/accounter/dashboard',
+    name: 'AccounterDashboard',
+    component: () => import('../modules/User/accounters/AccounterDashboardSimple.vue'),
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireRole(['accounter']),
   },
   {
     path: '/login',

@@ -3,6 +3,7 @@ const Product = require('../models/products/product');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 const socketService = require('../services/socketService');
+const AuditService = require('../services/auditService');
 
 // Generate receipt number
 const generateReceiptNumber = async () => {
@@ -36,11 +37,51 @@ exports.createExportReceipt = async (req, res, next) => {
 
     const { customerName, customerPhone, customerAddress, details, notes } = req.body;
 
-    // Validate required fields
-    if (!customerName || !details || !Array.isArray(details) || details.length === 0) {
+    // Validate required customer fields
+    if (!customerName || !customerName.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Customer name and export details are required'
+        message: 'Customer name is required'
+      });
+    }
+
+    if (!customerPhone || !customerPhone.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer phone is required'
+      });
+    }
+
+    if (!customerAddress || !customerAddress.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer address is required'
+      });
+    }
+
+    // Validate phone format
+    const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,}$/;
+    if (!phoneRegex.test(customerPhone.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid phone number format'
+      });
+    }
+
+    // Validate export details
+    if (!details || !Array.isArray(details) || details.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Export details are required'
+      });
+    }
+
+    // Validate at least one product with quantity > 0
+    const validDetails = details.filter(d => d.productId && d.quantity > 0);
+    if (validDetails.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one product with quantity > 0 is required'
       });
     }
 
@@ -63,84 +104,95 @@ exports.createExportReceipt = async (req, res, next) => {
       });
     }
 
-    // Validate products and check stock
+    // Validate products and check stock with transactional lock
     let totalAmount = 0;
     const validatedDetails = [];
 
-    for (const detail of details) {
-      const { productId, quantity } = detail;
+    // Start transaction for atomic stock validation and update
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-      if (!productId || !quantity || quantity <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid product or quantity in export details'
+    try {
+      for (const detail of validDetails) {
+        const { productId, quantity } = detail;
+
+        if (!productId || !quantity || quantity <= 0) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid product or quantity in export details'
+          });
+        }
+
+        // Check if product exists and belongs to the same warehouse with lock
+        const product = await Product.findOne({
+          _id: productId,
+          warehouseId: warehouseId
+        }).session(session);
+
+        if (!product) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message: `Product not found or not in your warehouse`
+          });
+        }
+
+        // CRITICAL: Check stock availability with atomic lock
+        if (product.quantity < quantity) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for ${product.name}. Available: ${product.quantity}, Requested: ${quantity}`
+          });
+        }
+
+        // Atomically update stock quantity
+        const updatedProduct = await Product.findByIdAndUpdate(
+          productId,
+          { $inc: { quantity: -quantity } },
+          { new: true, session }
+        );
+
+        if (!updatedProduct) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message: 'Failed to update product stock'
+          });
+        }
+
+        validatedDetails.push({
+          productId,
+          quantity: parseInt(quantity)
         });
+
+        totalAmount += (product.finalPrice || product.basePrice) * quantity;
       }
 
-      // Check if product exists and belongs to the same warehouse
-      const product = await Product.findOne({
-        _id: productId,
-        warehouseId: warehouseId
+      // Generate receipt number
+      const receiptNumber = await generateReceiptNumber();
+
+      // Create export receipt within transaction
+      const exportReceipt = new ExportReceipt({
+        receiptNumber,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        customerAddress: customerAddress.trim(),
+        warehouseId,
+        createdByStaff: req.user.sub,
+        details: validatedDetails,
+        totalAmount,
+        notes: notes?.trim() || '',
+        status: 'created'
       });
 
-      if (!product) {
-        return res.status(400).json({
-          success: false,
-          message: `Product not found or not in your warehouse`
-        });
-      }
+      await exportReceipt.save({ session });
 
-      // Check stock availability
-      if (product.quantity < quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for ${product.name}. Available: ${product.quantity}, Requested: ${quantity}`
-        });
-      }
+      // Commit transaction
+      await session.commitTransaction();
 
-      validatedDetails.push({
-        productId,
-        quantity: parseInt(quantity)
-      });
-
-      totalAmount += (product.finalPrice || product.basePrice) * quantity;
-    }
-
-    // Generate receipt number
-    const receiptNumber = await generateReceiptNumber();
-
-    // Create export receipt
-    const exportReceipt = new ExportReceipt({
-      receiptNumber,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone?.trim() || '',
-      customerAddress: customerAddress?.trim() || '',
-      warehouseId,
-      createdByStaff: req.user.sub,
-      details: validatedDetails,
-      totalAmount,
-      notes: notes?.trim() || '',
-      status: 'created'
-    });
-
-    await exportReceipt.save();
-
-    // Reserve product quantities immediately when export receipt is created
-    console.log('🔒 Reserving product quantities for export receipt:', receiptNumber);
-    for (const detail of validatedDetails) {
-      const result = await Product.findByIdAndUpdate(
-        detail.productId,
-        {
-          $inc: { quantity: -detail.quantity },
-          updatedBy: req.user.sub,
-          updatedAt: new Date()
-        },
-        { new: true }
-      );
-
-      console.log(`✅ Reserved ${detail.quantity} units of product ${result?.name || detail.productId}`);
-      console.log(`📦 New stock level: ${result?.quantity || 'unknown'}`);
-    }
+      console.log('✅ Export receipt created successfully with atomic stock update:', receiptNumber);
 
     // Populate for response
     await exportReceipt.populate([
@@ -158,13 +210,81 @@ exports.createExportReceipt = async (req, res, next) => {
       action: 'created'
     });
 
+    // Log audit trail
+    try {
+      await AuditService.logCreateExportSlip(
+        {
+          id: user._id,
+          email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+          name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+          role: user.role
+        },
+        exportReceipt,
+        'SUCCESS',
+        null,
+        {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          warehouseId: warehouseId
+        }
+      );
+    } catch (auditError) {
+      console.error('Failed to log audit trail:', auditError);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Export receipt created successfully',
       exportReceipt
     });
+    } catch (transactionError) {
+      // Rollback transaction if it exists
+      if (session) {
+        await session.abortTransaction();
+        await session.endSession();
+      }
+      throw transactionError;
+    } finally {
+      // End session if it exists
+      if (session) {
+        await session.endSession();
+      }
+    }
+
   } catch (error) {
     console.error('❌ Error creating export receipt:', error);
+    
+    // Log audit trail for failed creation
+    try {
+      const user = await User.findById(req.user.sub);
+      if (user) {
+        await AuditService.logCreateExportSlip(
+        {
+          id: user._id,
+          email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+          name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+          role: user.role
+        },
+          {
+            _id: null,
+            receiptNumber: 'Failed',
+            customerName: req.body.customerName || 'Unknown',
+            totalAmount: 0,
+            status: 'failed'
+          },
+          'FAILED',
+          error.message || 'Export receipt creation failed',
+          {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            warehouseId: user.staff?.warehouseId
+          }
+        );
+      }
+    } catch (auditError) {
+      console.error('Failed to log audit trail for error:', auditError);
+    }
+    
     next(error);
   }
 };
@@ -446,6 +566,33 @@ exports.managerReviewReceipt = async (req, res, next) => {
     exportReceipt.updatedBy = req.user.sub;
     await exportReceipt.save();
 
+    // Emit Socket.IO notification for status change
+    try {
+      const socketService = require('../services/socketService');
+      
+      // Notify export status changed to both managers and admins
+      const statusNotification = {
+        type: 'export_status_changed',
+        title: '📦 Export Status Changed',
+        message: `Export ${exportReceipt.receiptNumber || exportReceipt._id} has been ${action}d by manager`,
+        data: exportReceipt,
+        timestamp: new Date()
+      };
+      
+      socketService.emitToRoom('managers', 'export-status-changed', statusNotification);
+      socketService.emitToRoom('admins', 'export-status-changed', statusNotification);
+      
+      // Also notify chart data updated
+      socketService.notifyChartDataUpdated('all', {
+        exportReceiptId: exportReceipt._id,
+        action: action === 'approve' ? 'manager_approved' : 'manager_rejected'
+      });
+      
+      console.log('📢 Socket.IO: Export status changed notification sent');
+    } catch (socketError) {
+      console.warn('⚠️ Socket.IO notification failed:', socketError.message);
+    }
+
     // Populate for response
     await exportReceipt.populate([
       { path: 'warehouseId', select: 'name location' },
@@ -536,6 +683,15 @@ exports.adminApproveReceipt = async (req, res, next) => {
     } else {
       exportReceipt.status = 'rejected';
 
+      // Emit Socket.IO notification for rejected export
+      socketService.notifyExportRejected(exportReceipt);
+
+      // Notify chart data update
+      socketService.notifyChartDataUpdated('all', {
+        exportReceiptId: exportReceipt._id,
+        action: 'rejected'
+      });
+
       // Restore product quantities when rejected
       console.log('🔄 Restoring product quantities for rejected export receipt:', exportReceipt.receiptNumber);
       for (const detail of exportReceipt.details) {
@@ -590,6 +746,17 @@ exports.updateExportReceipt = async (req, res, next) => {
         message: 'Export receipt not found'
       });
     }
+
+    // Store old data for audit logging
+    const oldData = {
+      receiptNumber: exportReceipt.receiptNumber,
+      customerName: exportReceipt.customerName,
+      customerPhone: exportReceipt.customerPhone,
+      customerAddress: exportReceipt.customerAddress,
+      totalAmount: exportReceipt.totalAmount,
+      status: exportReceipt.status,
+      notes: exportReceipt.notes
+    };
 
     // Check if receipt can be edited
     if (exportReceipt.status !== 'created' && exportReceipt.status !== 'rejected') {
@@ -735,6 +902,32 @@ exports.updateExportReceipt = async (req, res, next) => {
       { path: 'details.productId', select: 'name sku basePrice finalPrice priceMarkupPercent' }
     ]);
 
+    // Log audit trail
+    try {
+      const user = await User.findById(req.user.sub);
+      if (user) {
+        await AuditService.logUpdateExportSlip(
+        {
+          id: user._id,
+          email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+          name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+          role: user.role
+        },
+          exportReceipt,
+          oldData,
+          'SUCCESS',
+          null,
+          {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            warehouseId: exportReceipt.warehouseId
+          }
+        );
+      }
+    } catch (auditError) {
+      console.error('Failed to log audit trail:', auditError);
+    }
+
     res.json({
       success: true,
       message: 'Export receipt updated successfully',
@@ -794,11 +987,47 @@ exports.deleteExportReceipt = async (req, res, next) => {
       }
     }
 
+    // Store data before deletion for audit logging
+    const deletedData = {
+      receiptNumber: exportReceipt.receiptNumber,
+      customerName: exportReceipt.customerName,
+      customerPhone: exportReceipt.customerPhone,
+      customerAddress: exportReceipt.customerAddress,
+      totalAmount: exportReceipt.totalAmount,
+      status: exportReceipt.status,
+      notes: exportReceipt.notes
+    };
+
     // Soft delete the receipt
     exportReceipt.deletedAt = new Date();
     exportReceipt.updatedBy = req.user.sub;
     exportReceipt.updatedAt = new Date();
     await exportReceipt.save();
+
+    // Log audit trail
+    try {
+      const user = await User.findById(req.user.sub);
+      if (user) {
+        await AuditService.logDeleteExportSlip(
+        {
+          id: user._id,
+          email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+          name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+          role: user.role
+        },
+          deletedData,
+          'SUCCESS',
+          null,
+          {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            warehouseId: exportReceipt.warehouseId
+          }
+        );
+      }
+    } catch (auditError) {
+      console.error('Failed to log audit trail:', auditError);
+    }
 
     res.json({
       success: true,

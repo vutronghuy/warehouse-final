@@ -4,6 +4,7 @@ const Product = require("../models/products/product");
 const User = require("../models/User");
 const mongoose = require("mongoose");
 const socketService = require("../services/socketService");
+const AuditService = require("../services/auditService");
 
 // Create invoice from export receipt (Staff only)
 const createInvoiceFromExport = async (req, res, next) => {
@@ -24,6 +25,32 @@ const createInvoiceFromExport = async (req, res, next) => {
       return res
         .status(400)
         .json({ success: false, message: "Export receipt ID is required" });
+    }
+
+    // Validate payment condition
+    const validPaymentConditions = ["cash", "net15", "net30", "net45", "net60"];
+    if (!validPaymentConditions.includes(paymentCondition)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment condition. Must be one of: cash, net15, net30, net45, net60"
+      });
+    }
+
+    // Validate currency
+    const validCurrencies = ["VND", "USD", "EUR"];
+    if (!validCurrencies.includes(currency)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid currency. Must be one of: VND, USD, EUR"
+      });
+    }
+
+    // Validate VAT rate
+    if (isNaN(vatRate) || vatRate < 0 || vatRate > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "VAT rate must be between 0 and 100"
+      });
     }
 
     const user = await User.findById(req.user.sub).lean();
@@ -241,7 +268,31 @@ const createInvoiceFromExport = async (req, res, next) => {
       dueDate,
     });
 
-    await invoice.save();
+    try {
+      await invoice.save();
+    } catch (saveError) {
+      // Xử lý lỗi duplicate key
+      if (saveError.code === 11000 && saveError.keyPattern?.invoiceNumber) {
+        console.log('Duplicate invoice number detected, generating new one...');
+        
+        // Tạo invoice number mới và thử lại
+        const newInvoiceNumber = await Invoice.generateInvoiceNumber();
+        invoice.invoiceNumber = newInvoiceNumber;
+        
+        try {
+          await invoice.save();
+        } catch (retryError) {
+          console.error('Failed to save invoice after retry:', retryError);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to create invoice due to duplicate key error",
+            error: retryError.message
+          });
+        }
+      } else {
+        throw saveError;
+      }
+    }
 
     await invoice.populate([
       { path: "warehouseId", select: "name location" },
@@ -259,6 +310,29 @@ const createInvoiceFromExport = async (req, res, next) => {
       action: 'created'
     });
 
+    // Log audit trail
+    try {
+      await AuditService.logCreateInvoice(
+        {
+          id: user._id,
+          email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+          name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+          role: user.role
+        },
+        invoice,
+        'SUCCESS',
+        null,
+        {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          warehouseId: warehouseId,
+          exportReceiptId: exportReceiptId
+        }
+      );
+    } catch (auditError) {
+      console.error('Failed to log audit trail:', auditError);
+    }
+
     res.status(201).json({
       success: true,
       message: "Invoice created successfully",
@@ -266,6 +340,40 @@ const createInvoiceFromExport = async (req, res, next) => {
     });
   } catch (error) {
     console.error("❌ Error creating invoice:", error);
+    
+    // Log audit trail for failed creation
+    try {
+      const user = await User.findById(req.user.sub);
+      if (user) {
+        await AuditService.logCreateInvoice(
+          {
+            id: user._id,
+            email: user.email,
+            name: user.staff?.fullName || 'Unknown',
+            role: user.role
+          },
+          {
+            _id: null,
+            invoiceNumber: 'Failed',
+            customerName: req.body.customerName || 'Unknown',
+            totalAmount: 0,
+            finalAmount: 0,
+            status: 'failed'
+          },
+          'FAILED',
+          error.message || 'Invoice creation failed',
+          {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            warehouseId: user.staff?.warehouseId,
+            exportReceiptId: req.body.exportReceiptId
+          }
+        );
+      }
+    } catch (auditError) {
+      console.error('Failed to log audit trail for error:', auditError);
+    }
+    
     next(error);
   }
 };
@@ -426,7 +534,31 @@ const createInvoiceFromExportForce = async (req, res, next) => {
     invoice.vatAmount = (invoice.totalAmount * vatRate) / 100;
     invoice.grandTotal = invoice.totalAmount + invoice.vatAmount;
 
-    await invoice.save();
+    try {
+      await invoice.save();
+    } catch (saveError) {
+      // Xử lý lỗi duplicate key
+      if (saveError.code === 11000 && saveError.keyPattern?.invoiceNumber) {
+        console.log('Duplicate invoice number detected in force mode, generating new one...');
+        
+        // Tạo invoice number mới và thử lại
+        const newInvoiceNumber = await Invoice.generateInvoiceNumber();
+        invoice.invoiceNumber = newInvoiceNumber;
+        
+        try {
+          await invoice.save();
+        } catch (retryError) {
+          console.error('Failed to save invoice after retry in force mode:', retryError);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to create invoice due to duplicate key error",
+            error: retryError.message
+          });
+        }
+      } else {
+        throw saveError;
+      }
+    }
 
     // Populate the invoice with product details
     await invoice.populate([
@@ -494,6 +626,7 @@ const getAllInvoices = async (req, res, next) => {
     // Add status filter
     if (status) {
       filter.status = status;
+      console.log('🔍 Filtering invoices by status:', status);
     }
 
     // Add search filter
@@ -517,6 +650,14 @@ const getAllInvoices = async (req, res, next) => {
       .limit(parseInt(limit));
 
     const total = await Invoice.countDocuments(filter);
+
+    // Debug logging
+    console.log('📊 Invoice query results:', {
+      filter,
+      found: invoices.length,
+      total,
+      statuses: invoices.map(inv => ({ id: inv._id, status: inv.status, number: inv.invoiceNumber }))
+    });
 
     res.json({
       success: true,
@@ -857,6 +998,20 @@ const updateInvoice = async (req, res, next) => {
       });
     }
 
+    // Store old data for audit logging
+    const oldData = {
+      invoiceNumber: invoice.invoiceNumber,
+      customerName: invoice.customerName,
+      totalAmount: invoice.totalAmount,
+      finalAmount: invoice.finalAmount,
+      vatRate: invoice.vatRate,
+      vatAmount: invoice.vatAmount,
+      paymentCondition: invoice.paymentCondition,
+      currency: invoice.currency,
+      status: invoice.status,
+      note: invoice.note
+    };
+
     // Check if user created this invoice
     if (invoice.createdByStaff.toString() !== req.user.sub) {
       return res.status(403).json({
@@ -944,6 +1099,29 @@ const updateInvoice = async (req, res, next) => {
       { path: "exportReceiptId", select: "receiptNumber" },
     ]);
 
+    // Log audit trail
+    try {
+      await AuditService.logUpdateInvoice(
+        {
+          id: user._id,
+          email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+          name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+          role: user.role
+        },
+        invoice,
+        oldData,
+        'SUCCESS',
+        null,
+        {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          warehouseId: invoice.warehouseId
+        }
+      );
+    } catch (auditError) {
+      console.error('Failed to log audit trail:', auditError);
+    }
+
     res.json({
       success: true,
       message: "Invoice updated successfully",
@@ -955,17 +1133,45 @@ const updateInvoice = async (req, res, next) => {
   }
 };
 
-// Get total revenue from all invoices
+// Get total revenue from invoices (optionally scoped by warehouse)
 const getTotalRevenue = async (req, res, next) => {
   try {
-    // Lấy tổng doanh thu từ tất cả invoice có status = 'approved'
+    const { warehouse: warehouseQuery } = req.query || {};
+    let effectiveWarehouse = warehouseQuery || req.user?.warehouseId || null;
+
+    // Ensure staff/manager/accounter only see their warehouse data
+    if (!effectiveWarehouse && ['staff', 'manager', 'accounter'].includes(req.user.role)) {
+      const userDoc = await User.findById(req.user.sub)
+        .select('staff.warehouseId manager.warehouseId accounter.warehouseId')
+        .lean();
+      const roleData = userDoc ? userDoc[req.user.role] : null;
+      effectiveWarehouse = roleData?.warehouseId ? roleData.warehouseId.toString() : null;
+
+      if (!effectiveWarehouse) {
+        return res.status(403).json({
+          success: false,
+          message: 'Warehouse assignment is required for this role.'
+        });
+      }
+    }
+
+    const matchStage = {
+      status: { $in: ['approved', 'paid'] },
+      deletedAt: null
+    };
+
+    if (effectiveWarehouse) {
+      if (!mongoose.Types.ObjectId.isValid(effectiveWarehouse)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid warehouse id.'
+        });
+      }
+      matchStage.warehouseId = new mongoose.Types.ObjectId(String(effectiveWarehouse));
+    }
+
     const result = await Invoice.aggregate([
-      {
-        $match: {
-          status: 'approved',
-          deletedAt: null
-        }
-      },
+      { $match: matchStage },
       {
         $group: {
           _id: null,
@@ -984,7 +1190,6 @@ const getTotalRevenue = async (req, res, next) => {
       totalInvoices,
       message: 'Total revenue calculated successfully'
     });
-
   } catch (error) {
     console.error('Get total revenue error:', error);
     next(error);
@@ -1041,11 +1246,47 @@ const deleteInvoice = async (req, res, next) => {
       });
     }
 
+    // Store data before deletion for audit logging
+    const deletedData = {
+      invoiceNumber: invoice.invoiceNumber,
+      customerName: invoice.customerName,
+      totalAmount: invoice.totalAmount,
+      finalAmount: invoice.finalAmount,
+      vatRate: invoice.vatRate,
+      vatAmount: invoice.vatAmount,
+      paymentCondition: invoice.paymentCondition,
+      currency: invoice.currency,
+      status: invoice.status,
+      note: invoice.note
+    };
+
     // Soft delete the invoice
     invoice.deletedAt = new Date();
     await invoice.save();
 
     console.log('✅ Invoice deleted successfully:', invoice._id);
+
+    // Log audit trail
+    try {
+      await AuditService.logDeleteInvoice(
+        {
+          id: user._id,
+          email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+          name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+          role: user.role
+        },
+        deletedData,
+        'SUCCESS',
+        null,
+        {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          warehouseId: invoice.warehouseId
+        }
+      );
+    } catch (auditError) {
+      console.error('Failed to log audit trail:', auditError);
+    }
 
     // Send notification to accounters about invoice deletion
     socketService.notifyInvoiceDeleted(invoice);

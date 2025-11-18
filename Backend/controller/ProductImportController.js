@@ -7,6 +7,7 @@ const Supplier = require("../models/products/Supplier");
 const User = require("../models/User");
 const ImportReceipt = require("../models/import/ImportReceipt");
 const mongoose = require("mongoose");
+const AuditService = require("../services/auditService");
 
 // --- Counter model for atomic receipt sequence (keeps in this file for convenience) ---
 let ImportCounter;
@@ -506,6 +507,37 @@ exports.importProducts = async (req, res) => {
       ...results,
     });
 
+    // Log audit trail
+    try {
+      const user = await User.findById(req.user.sub);
+      if (user) {
+        await AuditService.logImportProductExcel(
+                 {
+                   id: user._id,
+                   email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+                   name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+                   role: user.role
+                 },
+          {
+            _id: importReceiptId,
+            fileName: req.file?.originalname || 'Unknown',
+            importedProducts: results.importedProducts || [],
+            successCount: results.successful,
+            errorCount: results.failed
+          },
+          'SUCCESS',
+          null,
+          {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            warehouseId: user.staff?.warehouseId || user.manager?.warehouseId || user.admin?.managedWarehouses?.[0]
+          }
+        );
+      }
+    } catch (auditError) {
+      console.error('Failed to log audit trail:', auditError);
+    }
+
     return res.json({
       success: true,
       message: `Import completed. ${results.successful} new products, ${results.updated} updated, ${results.failed} failed.`,
@@ -514,6 +546,37 @@ exports.importProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Import error:", error && error.stack ? error.stack : error);
+
+    // Log audit trail for failed import
+    try {
+      const user = await User.findById(req.user.sub);
+      if (user) {
+        await AuditService.logImportProductExcel(
+                 {
+                   id: user._id,
+                   email: user.staff?.email || user.manager?.email || user.admin?.email || user.accounter?.email || 'No email',
+                   name: user.staff?.fullName || user.manager?.fullName || user.admin?.fullName || user.accounter?.fullName || 'Unknown',
+                   role: user.role
+                 },
+          {
+            _id: null,
+            fileName: req.file?.originalname || 'Unknown',
+            importedProducts: [],
+            successCount: 0,
+            errorCount: 0
+          },
+          'FAILED',
+          error.message || 'Import failed',
+          {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            warehouseId: user.staff?.warehouseId || user.manager?.warehouseId || user.admin?.managedWarehouses?.[0]
+          }
+        );
+      }
+    } catch (auditError) {
+      console.error('Failed to log audit trail for error:', auditError);
+    }
 
     // Cleanup on global error
     try {

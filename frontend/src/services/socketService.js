@@ -28,7 +28,7 @@ class SocketService {
     try {
       console.log('🚀 Connecting to Socket.IO server...');
       // Kết nối đến Socket.IO server
-      this.socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001', {
+      this.socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3003', {
         transports: ['polling', 'websocket'],
         timeout: 10000,
         forceNew: false,
@@ -132,6 +132,20 @@ class SocketService {
       }
     });
 
+    this.socket.on('export-status-changed', (data) => {
+      if (this.socket) {
+        console.log('Received export-status-changed notification:', data);
+        this.handleExportStatusChanged(data);
+      }
+    });
+
+    this.socket.on('export-rejected', (data) => {
+      if (this.socket) {
+        console.log('Received export-rejected notification:', data);
+        this.handleExportRejected(data);
+      }
+    });
+
     this.socket.on('invoice-created', (data) => {
       if (this.socket) {
         console.log('Received invoice-created notification:', data);
@@ -176,11 +190,36 @@ class SocketService {
   handleExportCreated(data) {
     const notificationStore = useNotificationStore();
     notificationStore.notifyExportCreated(data);
+
+    // Emit custom event for sidebar components
+    window.dispatchEvent(new CustomEvent('export-created', { detail: data }));
   }
 
   handleExportApproved(data) {
-    const notificationStore = useNotificationStore();
-    notificationStore.notifyExportApproved(data);
+    // Không tạo notification cho admin khi approve/reject
+    // Chỉ emit custom event để cập nhật UI
+    console.log('✅ Export approved (no notification for admin):', data);
+
+    // Emit custom event for sidebar components
+    window.dispatchEvent(new CustomEvent('export-approved', { detail: data }));
+  }
+
+  handleExportStatusChanged(data) {
+    // Không tạo notification cho manager khi approve/reject
+    // Chỉ emit custom event để cập nhật UI
+    console.log('📦 Export status changed (no notification for manager):', data);
+
+    // Emit custom event for sidebar components
+    window.dispatchEvent(new CustomEvent('export-status-changed', { detail: data }));
+  }
+
+  handleExportRejected(data) {
+    // Không tạo notification cho admin khi approve/reject
+    // Chỉ emit custom event để cập nhật UI
+    console.log('❌ Export rejected (no notification for admin):', data);
+
+    // Emit custom event for sidebar components
+    window.dispatchEvent(new CustomEvent('export-rejected', { detail: data }));
   }
 
   handleInvoiceCreated(data) {

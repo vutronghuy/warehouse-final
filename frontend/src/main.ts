@@ -5,12 +5,13 @@ import router from '@/router';
 import App from './App.vue';
 
 import axios, { InternalAxiosRequestConfig, AxiosRequestHeaders } from 'axios';
-
+import Toast, { POSITION } from 'vue-toastification'
+import 'vue-toastification/dist/index.css'
 import 'ant-design-vue/dist/reset.css';
 import './assets/styles/app.scss';
 
 // --- axios global setup ---
-axios.defaults.baseURL = 'http://localhost:3001'; // chỉnh nếu backend chạy port khác
+axios.defaults.baseURL = 'http://localhost:3003'; // chỉnh nếu backend chạy port khác
 axios.defaults.withCredentials = true; // nếu dùng refresh token trong cookie, cần gửi credentials
 
 // Lấy token (localStorage ưu tiên, fallback sessionStorage)
@@ -60,6 +61,34 @@ export function parseJwt(token: string | null) {
 }
 
 const app = createApp(App);
+app.use(Toast, {
+  position: POSITION.TOP_RIGHT,
+  timeout: 3000,       // thời gian hiển thị (ms)
+  closeOnClick: true,  // click để đóng
+  pauseOnHover: true,  // hover sẽ dừng timer
+})
 app.use(createPinia());
 app.use(router);
+
+// Handle force logout from socket
+import { io } from 'socket.io-client';
+import { useToast } from 'vue-toastification';
+
+const socket = io('http://localhost:3003');
+const toast = useToast();
+
+socket.on('force-logout', (data) => {
+  // Clear local storage
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+
+  // Show notification
+  toast.error(data.message);
+
+  // Redirect to login
+  window.location.href = '/login';
+});
+
 app.mount('#__app');

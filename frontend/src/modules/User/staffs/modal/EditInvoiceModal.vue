@@ -1,16 +1,23 @@
 <template>
-  <div v-if="visible" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @keydown.esc.prevent="onClose" tabindex="-1">
-    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white" @click.self.stop>
-      <div class="mt-3">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-medium text-gray-900">Edit Invoice</h3>
-          <button @click="onClose" class="text-gray-400 hover:text-gray-600" aria-label="Close">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
+  <div
+    v-if="visible"
+    class="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4"
+    @keydown.esc.prevent="onClose"
+    tabindex="-1"
+  >
+    <div class="w-full max-w-6xl max-h-[90vh] bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+      <!-- Modal Header - Fixed -->
+      <div class="flex justify-between items-center p-6 border-b border-gray-200 bg-white">
+        <h3 class="text-lg font-medium text-gray-900">Edit Invoice</h3>
+        <button @click="onClose" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
 
+      <!-- Modal Content - Scrollable -->
+      <div class="flex-1 overflow-y-auto p-6">
         <form @submit.prevent="submit" class="space-y-4" :aria-busy="isSubmitting">
           <fieldset :disabled="isSubmitting" class="space-y-4">
             <!-- Customer Info (Read-only) -->
@@ -148,7 +155,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, computed } from 'vue'
+import { reactive, ref, watch, computed, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -157,6 +164,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'close', 'error'])
+
+// Scroll management
+const scrollY = ref(0) // Store scroll position for body scroll prevention
 
 // Exchange rates (USD as base currency)
 const exchangeRates = {
@@ -286,6 +296,56 @@ function submit() {
   };
   emit('submit', payload);
 }
+
+// Methods to handle body scroll
+const preventBodyScroll = () => {
+  // Store current scroll position
+  scrollY.value = window.scrollY
+  // Apply styles to prevent scrolling
+  document.body.style.position = 'fixed'
+  document.body.style.top = `-${scrollY.value}px`
+  document.body.style.width = '100%'
+  document.body.style.overflow = 'hidden'
+}
+
+const allowBodyScroll = () => {
+  // Remove fixed positioning
+  document.body.style.position = ''
+  document.body.style.top = ''
+  document.body.style.width = ''
+  document.body.style.overflow = ''
+  // Restore scroll position
+  if (scrollY.value !== undefined) {
+    window.scrollTo(0, scrollY.value)
+  }
+}
+
+// Watch visible prop to handle body scroll
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) {
+      // Prevent body scroll when modal opens
+      preventBodyScroll()
+    } else {
+      // Allow body scroll when modal closes
+      allowBodyScroll()
+    }
+  },
+)
+
+// Lifecycle hooks
+onMounted(() => {
+  // Prevent body scroll if modal is already visible
+  if (props.visible) {
+    preventBodyScroll()
+  }
+})
+
+onUnmounted(() => {
+  // Ensure body scroll is restored when component is destroyed
+  allowBodyScroll()
+})
 
 function onClose() {
   emit('close');

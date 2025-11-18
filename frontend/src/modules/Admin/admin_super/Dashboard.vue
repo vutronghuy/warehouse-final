@@ -9,144 +9,197 @@
       <Headers />
 
       <!-- Dashboard Content -->
-      <main class="flex-1 overflow-y-auto p-6">
+      <main class="flex-1 overflow-y-auto p-6 space-y-8">
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-              <div class="p-2 bg-blue-100 rounded-lg">
-                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
-                </svg>
+
+        <!-- Charts for Super Admin -->
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <!-- Inventory Levels by Warehouse -->
+          <div class="bg-white rounded-lg shadow p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900">Inventory Levels by Warehouse</h3>
+                <p class="text-xs text-gray-500 mt-1">
+                  Số lượng tồn (hoặc giá trị tồn kho) theo từng kho
+                </p>
               </div>
-              <div class="ml-4">
-                <p class="text-sm font-medium text-gray-600">Total Users</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.totalUsers }}</p>
-              </div>
+            </div>
+            <div class="flex-1">
+              <canvas ref="inventoryChartCanvas"></canvas>
             </div>
           </div>
 
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-              <div class="p-2 bg-green-100 rounded-lg">
-                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h4M9 7h6m-6 4h6m-6 4h6"/>
-                </svg>
+          <!-- Inbound vs Outbound Trends -->
+          <div class="bg-white rounded-lg shadow p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900">Inbound vs Outbound Trends</h3>
+                <p class="text-xs text-gray-500 mt-1">
+                  Xu hướng nhập - xuất theo thời gian (doanh thu vs chi phí)
+                </p>
               </div>
-              <div class="ml-4">
-                <p class="text-sm font-medium text-gray-600">Warehouses</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.totalWarehouses }}</p>
-              </div>
+            </div>
+            <div class="flex items-center gap-3 mb-4 text-xs">
+              <label class="flex items-center gap-2">
+                <span class="text-gray-600">Kỳ</span>
+                <select v-model="cashFlowFilter.period" class="border border-gray-300 rounded px-2 py-1 text-xs">
+                  <option value="year">Yearly</option>
+                  <option value="month">Monthly</option>
+                  <option value="day">Daily (trong tháng)</option>
+                </select>
+              </label>
+              <label class="flex items-center gap-2" v-if="cashFlowFilter.period !== 'day'">
+                <span class="text-gray-600">Năm</span>
+                <input
+                  v-model.number="cashFlowFilter.year"
+                  type="number"
+                  class="border border-gray-300 rounded px-2 py-1 w-20 text-xs"
+                />
+              </label>
+              <label class="flex items-center gap-2" v-else>
+                <span class="text-gray-600">Tháng/Năm</span>
+                <input
+                  v-model.number="cashFlowFilter.year"
+                  type="number"
+                  class="border border-gray-300 rounded px-2 py-1 w-20 text-xs"
+                />
+                <input
+                  v-model.number="cashFlowFilter.month"
+                  type="number"
+                  min="1"
+                  max="12"
+                  class="border border-gray-300 rounded px-2 py-1 w-16 text-xs"
+                />
+              </label>
+              <button
+                type="button"
+                class="ml-auto inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-gray-900 text-white hover:bg-gray-800"
+                @click="reloadCashFlow"
+              >
+                Áp dụng
+              </button>
+            </div>
+            <div class="flex-1">
+              <canvas ref="cashFlowChartCanvas"></canvas>
             </div>
           </div>
 
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-              <div class="p-2 bg-yellow-100 rounded-lg">
-                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                </svg>
-              </div>
-              <div class="ml-4">
-                <p class="text-sm font-medium text-gray-600">Products</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.totalProducts }}</p>
-              </div>
-            </div>
-          </div>
+        </section>
 
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-              <div class="p-2 bg-purple-100 rounded-lg">
-                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-                </svg>
+        <!-- Revenue by Warehouse -->
+        <section>
+          <div class="bg-white rounded-lg shadow p-6 flex flex-col">
+            <div class="flex items-start justify-between mb-4 gap-3">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900">Revenue by Warehouse</h3>
+                <p class="text-xs text-gray-500 mt-1">
+                  Doanh thu theo từng kho, có lọc kho và khoảng thời gian
+                </p>
               </div>
-              <div class="ml-4">
-                <p class="text-sm font-medium text-gray-600">Orders</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.totalOrders }}</p>
+              <div class="text-right">
+                <p class="text-xs text-gray-500">Tổng doanh thu</p>
+                <p class="text-xl font-semibold text-emerald-600">
+                  {{ formatCurrency(totalRevenueByWarehouse) }}
+                </p>
               </div>
             </div>
+
+            <div class="flex flex-wrap items-center gap-3 mb-4 text-xs">
+              <label class="flex items-center gap-2">
+                <span class="text-gray-600">Kho</span>
+                <select
+                  v-model="selectedWarehouseForRevenue"
+                  class="border border-gray-300 rounded px-2 py-1 text-xs min-w-[140px]"
+                >
+                  <option value="">Tất cả kho</option>
+                  <option
+                    v-for="w in warehouses"
+                    :key="w._id"
+                    :value="w._id"
+                  >
+                    {{ w.name }}
+                  </option>
+                </select>
+              </label>
+
+              <label class="flex items-center gap-2">
+                <span class="text-gray-600">Kỳ</span>
+                <select v-model="revenueFilter.period" class="border border-gray-300 rounded px-2 py-1 text-xs">
+                  <option value="all">Tất cả</option>
+                  <option value="year">Năm</option>
+                  <option value="month">Tháng</option>
+                </select>
+              </label>
+
+              <label
+                v-if="revenueFilter.period === 'year'"
+                class="flex items-center gap-2"
+              >
+                <span class="text-gray-600">Năm</span>
+                <input
+                  v-model.number="revenueFilter.year"
+                  type="number"
+                  class="border border-gray-300 rounded px-2 py-1 w-20 text-xs"
+                />
+              </label>
+
+              <label
+                v-if="revenueFilter.period === 'month'"
+                class="flex items-center gap-2"
+              >
+                <span class="text-gray-600">Tháng/Năm</span>
+                <input
+                  v-model.number="revenueFilter.year"
+                  type="number"
+                  class="border border-gray-300 rounded px-2 py-1 w-20 text-xs"
+                />
+                <input
+                  v-model.number="revenueFilter.month"
+                  type="number"
+                  min="1"
+                  max="12"
+                  class="border border-gray-300 rounded px-2 py-1 w-16 text-xs"
+                />
+              </label>
+
+              <button
+                type="button"
+                class="ml-auto inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-gray-900 text-white hover:bg-gray-800"
+                @click="reloadRevenueByWarehouse"
+              >
+                Áp dụng
+              </button>
+            </div>
+
+            <div class="flex-1">
+              <canvas ref="revenueChartCanvas"></canvas>
+            </div>
           </div>
-        </div>
+        </section>
 
         <!-- Recent Activity -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Recent Users -->
-          <div class="bg-white rounded-lg shadow">
-            <div class="p-6 border-b border-gray-200">
-              <h3 class="text-lg font-medium text-gray-900">Recent Users</h3>
-            </div>
-            <div class="p-6">
-              <div class="space-y-4">
-                <div v-for="user in recentUsers" :key="user.id" class="flex items-center">
-                  <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                    <span class="text-sm font-medium text-gray-700">{{ user.initials }}</span>
-                  </div>
-                  <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-900">{{ user.name }}</p>
-                    <p class="text-sm text-gray-500">{{ user.role }}</p>
-                  </div>
-                  <div class="ml-auto">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                          :class="user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
-                      {{ user.status }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <!-- System Status -->
-          <div class="bg-white rounded-lg shadow">
-            <div class="p-6 border-b border-gray-200">
-              <h3 class="text-lg font-medium text-gray-900">System Status</h3>
-            </div>
-            <div class="p-6">
-              <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <span class="text-sm font-medium text-gray-900">Database</span>
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Online
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-sm font-medium text-gray-900">API Server</span>
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Running
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-sm font-medium text-gray-900">Email Service</span>
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Active
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-sm font-medium text-gray-900">Storage</span>
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                    75% Used
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </main>
     </div>
+
+    <!-- ChatBot Component -->
+    <ChatBot />
   </div>
 </template>
 
 <script>
 import Sidebar from './Sidebar.vue';
 import Headers from './header.vue';
+import { ChatBot } from '@/components';
 import axios from 'axios';
+import Chart from 'chart.js/auto';
 
 export default {
   name: 'SuperAdminDashboard',
   components: {
     Sidebar,
-    Headers
+    Headers,
+    ChatBot
   },
   data() {
     return {
@@ -158,7 +211,36 @@ export default {
       },
       recentUsers: [],
       showUserMenu: false,
-      currentUserObj: null
+      currentUserObj: null,
+
+      // Warehouses for filters/charts
+      warehouses: [],
+
+      // Inventory by warehouse
+      inventoryLevels: [],
+
+      // Cash flow (inbound vs outbound)
+      cashFlowFilter: {
+        period: 'month',
+        year: new Date().getFullYear(),
+        month: new Date().getMonth() + 1
+      },
+      cashFlowSeries: [],
+
+      // Revenue by warehouse
+      revenueByWarehouse: [],
+      totalRevenueByWarehouse: 0,
+      selectedWarehouseForRevenue: '',
+      revenueFilter: {
+        period: 'all',
+        year: new Date().getFullYear(),
+        month: new Date().getMonth() + 1
+      },
+
+      // Chart.js instances
+      inventoryChart: null,
+      cashFlowChart: null,
+      revenueChart: null
     };
   },
   computed: {
@@ -191,6 +273,10 @@ export default {
     }
 
     await this.loadDashboardData();
+    await this.loadWarehouses();
+    await this.loadInventoryByWarehouse();
+    await this.loadCashFlowSeries();
+    await this.loadRevenueByWarehouse();
   },
   methods: {
     _loadUserFromStorage() {
@@ -221,6 +307,313 @@ export default {
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       }
+    },
+
+    // ---------- Helpers ----------
+    formatCurrency(value) {
+      if (value === null || value === undefined) return '0';
+      const n = Number(value) || 0;
+      return n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
+    },
+
+    // ---------- Load data for charts ----------
+    async loadWarehouses() {
+      try {
+        const res = await axios.get('/api/warehouses/active');
+        if (res.data && res.data.success !== false) {
+          this.warehouses = res.data.warehouses || res.data.data || [];
+        }
+      } catch (error) {
+        console.error('Error loading warehouses for super admin dashboard:', error);
+      }
+    },
+
+    async loadInventoryByWarehouse() {
+      if (!this.warehouses || this.warehouses.length === 0) {
+        this.destroyChart('inventory');
+        return;
+      }
+
+      const results = [];
+
+      for (const w of this.warehouses) {
+        try {
+          // Reuse inventory value endpoint as proxy for inventory level
+          const res = await axios.get('/api/reports/inventory-value', {
+            params: {
+              warehouse: w._id,
+              period: 'month',
+              months: 1
+            }
+          });
+          if (res.data && res.data.success !== false) {
+            const info = res.data.data || {};
+            const summary = info.summary || {};
+            const value = summary.currentValue || 0;
+            results.push({ warehouseName: w.name, value });
+          }
+        } catch (err) {
+          console.warn('Error loading inventory for warehouse', w._id, err?.response?.data || err.message);
+        }
+      }
+
+      this.inventoryLevels = results;
+      this.$nextTick(() => this.renderInventoryChart());
+    },
+
+    async loadCashFlowSeries() {
+      try {
+        const params = {
+          period: this.cashFlowFilter.period,
+          year: this.cashFlowFilter.year
+        };
+        if (this.cashFlowFilter.period === 'day') {
+          params.month = this.cashFlowFilter.month;
+        }
+        const res = await axios.get('/api/reports/cash-flow-time-series', { params });
+        if (res.data && res.data.success) {
+          this.cashFlowSeries = res.data.data?.series || [];
+        } else {
+          this.cashFlowSeries = [];
+        }
+      } catch (error) {
+        console.error('Error loading cash flow time series:', error);
+        this.cashFlowSeries = [];
+      }
+      this.$nextTick(() => this.renderCashFlowChart());
+    },
+
+    async loadRevenueByWarehouse() {
+      if (!this.warehouses || this.warehouses.length === 0) {
+        this.destroyChart('revenue');
+        return;
+      }
+
+      const results = [];
+      let total = 0;
+
+      const warehousesToUse = this.selectedWarehouseForRevenue
+        ? this.warehouses.filter((w) => w._id === this.selectedWarehouseForRevenue)
+        : this.warehouses;
+
+      for (const w of warehousesToUse) {
+        try {
+          const params = {
+            warehouse: w._id,
+            period: this.revenueFilter.period === 'all' ? 'all' : 'month'
+          };
+          if (this.revenueFilter.period === 'year') {
+            params.year = this.revenueFilter.year;
+          } else if (this.revenueFilter.period === 'month') {
+            params.year = this.revenueFilter.year;
+            params.months = 1;
+          }
+
+          const res = await axios.get('/api/reports/cash-flow', { params });
+          if (res.data && res.data.success) {
+            const summary = res.data.data?.summary || {};
+            const revenue = summary.totalRevenue || 0;
+            total += revenue;
+            results.push({ warehouseName: w.name, revenue });
+          }
+        } catch (err) {
+          console.warn('Error loading revenue for warehouse', w._id, err?.response?.data || err.message);
+        }
+      }
+
+      this.revenueByWarehouse = results;
+      this.totalRevenueByWarehouse = total;
+      this.$nextTick(() => this.renderRevenueChart());
+    },
+
+    reloadCashFlow() {
+      this.loadCashFlowSeries();
+    },
+
+    reloadRevenueByWarehouse() {
+      this.loadRevenueByWarehouse();
+    },
+
+    // ---------- Chart.js rendering ----------
+    destroyChart(type) {
+      if (type === 'inventory' && this.inventoryChart) {
+        this.inventoryChart.destroy();
+        this.inventoryChart = null;
+      }
+      if (type === 'cashFlow' && this.cashFlowChart) {
+        this.cashFlowChart.destroy();
+        this.cashFlowChart = null;
+      }
+      if (type === 'revenue' && this.revenueChart) {
+        this.revenueChart.destroy();
+        this.revenueChart = null;
+      }
+    },
+
+    renderInventoryChart() {
+      const canvas = this.$refs.inventoryChartCanvas;
+      if (!canvas) return;
+
+      const labels = this.inventoryLevels.map((x) => x.warehouseName);
+      const data = this.inventoryLevels.map((x) => x.value || 0);
+
+      this.destroyChart('inventory');
+
+      const ctx = canvas.getContext('2d');
+      this.inventoryChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Inventory Value (VND)',
+              data,
+              backgroundColor: 'rgba(59,130,246,0.8)',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => this.formatCurrency(context.parsed.y)
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#6B7280' },
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: '#9CA3AF',
+                callback: (val) => this.formatCurrency(val)
+              }
+            }
+          }
+        }
+      });
+    },
+
+    renderCashFlowChart() {
+      const canvas = this.$refs.cashFlowChartCanvas;
+      if (!canvas) return;
+
+      const labels = this.cashFlowSeries.map((x) => x.label);
+      const revenueData = this.cashFlowSeries.map((x) => x.revenueVND || 0);
+      const costData = this.cashFlowSeries.map((x) => x.costVND || 0);
+
+      this.destroyChart('cashFlow');
+
+      const ctx = canvas.getContext('2d');
+      this.cashFlowChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Outbound (Revenue)',
+              data: revenueData,
+              borderColor: 'rgba(16,185,129,1)',
+              backgroundColor: 'rgba(16,185,129,0.15)',
+              fill: true,
+              tension: 0.3
+            },
+            {
+              label: 'Inbound (Cost)',
+              data: costData,
+              borderColor: 'rgba(239,68,68,1)',
+              backgroundColor: 'rgba(239,68,68,0.1)',
+              fill: true,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#4B5563', boxWidth: 16, usePointStyle: true }
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => `${context.dataset.label}: ${this.formatCurrency(context.parsed.y)}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#6B7280' },
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: '#9CA3AF',
+                callback: (val) => this.formatCurrency(val)
+              }
+            }
+          }
+        }
+      });
+    },
+
+    renderRevenueChart() {
+      const canvas = this.$refs.revenueChartCanvas;
+      if (!canvas) return;
+
+      const labels = this.revenueByWarehouse.map((x) => x.warehouseName);
+      const data = this.revenueByWarehouse.map((x) => x.revenue || 0);
+
+      this.destroyChart('revenue');
+
+      const ctx = canvas.getContext('2d');
+      this.revenueChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Revenue (VND)',
+              data,
+              backgroundColor: 'rgba(37,99,235,0.8)',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => this.formatCurrency(context.parsed.y)
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#6B7280' },
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: '#9CA3AF',
+                callback: (val) => this.formatCurrency(val)
+              }
+            }
+          }
+        }
+      });
     },
     toggleUserMenu() {
       this.showUserMenu = !this.showUserMenu;

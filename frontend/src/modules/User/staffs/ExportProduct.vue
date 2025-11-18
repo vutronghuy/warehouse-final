@@ -222,6 +222,7 @@ import CreateExportModal from './modal/CreateExportModal.vue';
 import ViewExportModal from './modal/ViewExportModal.vue';
 import EditExportModal from './modal/EditExportModal.vue';
 import { useNotificationStore } from '@/store/modules/notification/slice';
+import { useToast } from 'vue-toastification';
 
 export default {
   name: 'ExportProduct',
@@ -232,8 +233,10 @@ export default {
   },
   setup() {
     const notificationStore = useNotificationStore();
+    const toast = useToast();
     return {
       notificationStore,
+      toast,
     };
   },
   data() {
@@ -478,7 +481,8 @@ export default {
           headers,
         });
         if (resp.data?.success) {
-          this.showMessage('Export receipt created successfully!', 'success');
+          // Hiển thị toast notification thành công
+          this.showToast('Phiếu xuất đã được tạo thành công!', 'success');
 
           // Send notification to manager
           this.notificationStore.notifyExportCreated(resp.data.exportReceipt);
@@ -488,11 +492,13 @@ export default {
           await this.fetchExportReceipts();
           await this.fetchProducts();
         } else {
-          this.showMessage(resp.data?.message || 'Create failed', 'error');
+          // Hiển thị toast notification lỗi
+          this.showToast(resp.data?.message || 'Tạo phiếu xuất thất bại!', 'error');
         }
       } catch (err) {
         console.error('Create export error:', err);
-        this.showMessage(err.response?.data?.message || 'Failed to create export receipt', 'error');
+        // Hiển thị toast notification lỗi cho catch block
+        this.showToast(err.response?.data?.message || 'Không thể tạo phiếu xuất. Vui lòng thử lại!', 'error');
       } finally {
         this.isCreating = false;
       }
@@ -501,7 +507,7 @@ export default {
     // Handle customer created event
     async handleCustomerCreated(customer) {
       console.log('✅ New customer created:', customer.name);
-      this.showMessage(`Customer "${customer.name}" saved successfully!`, 'success');
+      this.showToast(`Khách hàng "${customer.name}" đã được lưu thành công!`, 'success');
       // Refresh customer list
       await this.fetchCustomers();
     },
@@ -509,13 +515,13 @@ export default {
     // Handle customer exists event
     handleCustomerExists(existingCustomer) {
       console.log('ℹ️ Customer already exists:', existingCustomer.name);
-      this.showMessage(`Customer "${existingCustomer.name}" already exists in database`, 'info');
+      this.showToast(`Khách hàng "${existingCustomer.name}" đã tồn tại trong cơ sở dữ liệu`, 'info');
     },
 
     // Handle customer saved locally event
     handleCustomerSavedLocally(customer) {
       console.log('💾 Customer saved locally:', customer.name);
-      this.showMessage(`Customer "${customer.name}" saved locally for future use`, 'info');
+      this.showToast(`Khách hàng "${customer.name}" đã được lưu cục bộ để sử dụng sau`, 'info');
       // Refresh customer list to include the new local customer
       this.fetchCustomers();
     },
@@ -559,17 +565,17 @@ export default {
         });
         if (resp.data?.success) {
           const isResubmit = this.selectedReceipt.status === 'rejected';
-          this.showMessage(isResubmit ? 'Export receipt resubmitted!' : 'Export receipt updated!', 'success');
+          this.showToast(isResubmit ? 'Phiếu xuất đã được gửi lại thành công!' : 'Phiếu xuất đã được cập nhật thành công!', 'success');
           this.closeEditModal();
           this.currentPage = 1; // Reset to first page
           await this.fetchExportReceipts();
           await this.fetchProducts();
         } else {
-          this.showMessage(resp.data?.message || 'Update failed', 'error');
+          this.showToast(resp.data?.message || 'Cập nhật phiếu xuất thất bại!', 'error');
         }
       } catch (err) {
         console.error('Update export error:', err);
-        this.showMessage(err.response?.data?.message || 'Failed to update export receipt', 'error');
+        this.showToast(err.response?.data?.message || 'Không thể cập nhật phiếu xuất. Vui lòng thử lại!', 'error');
       } finally {
         this.isUpdating = false;
       }
@@ -727,6 +733,41 @@ export default {
       setTimeout(() => {
         this.message = '';
       }, 5000);
+    },
+
+    // Helper method để hiển thị toast với cấu hình mặc định
+    showToast(message, type = 'success') {
+      const toastOptions = {
+        position: 'top-right',
+        timeout: type === 'error' ? 5000 : 4000,
+        closeOnClick: true,
+        pauseOnFocusLoss: true,
+        pauseOnHover: true,
+        draggable: true,
+        draggablePercent: 0.6,
+        showCloseButtonOnHover: false,
+        hideProgressBar: false,
+        closeButton: "button",
+        icon: true,
+        rtl: false
+      };
+
+      switch (type) {
+        case 'success':
+          this.toast.success(message, toastOptions);
+          break;
+        case 'error':
+          this.toast.error(message, toastOptions);
+          break;
+        case 'info':
+          this.toast.info(message, toastOptions);
+          break;
+        case 'warning':
+          this.toast.warning(message, toastOptions);
+          break;
+        default:
+          this.toast(message, toastOptions);
+      }
     },
   },
 };

@@ -11,6 +11,16 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN;
 const REFRESH_SECRET = process.env.REFRESH_SECRET;
 const REFRESH_EXPIRES_IN = process.env.REFRESH_EXPIRES_IN;
 
+function normalizeWarehouseId(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') {
+    if (value._id) return value._id.toString();
+    if (typeof value.toString === 'function') return value.toString();
+  }
+  return null;
+}
+
 function parseDurationToMs(str) {
   if (!str || typeof str !== 'string') return null;
   const re = /^(\d+)\s*(d|h|m|s)?$/i;
@@ -91,7 +101,7 @@ exports.login = async (req, res) => {
     const { roleKey, sub } = found;
 
     if (sub.status !== 'active' || sub.isActive === false) {
-      return res.status(403).json({ ok: false, message: 'Tài khoản không hoạt động.' });
+      return res.status(403).json({ ok: false, message: 'Account is inactive.' });
     }
 
     const storedPassword = sub.password;
@@ -110,6 +120,10 @@ exports.login = async (req, res) => {
       roleKey,
       isSuperAdmin
     };
+    const warehouseId = normalizeWarehouseId(sub?.warehouseId);
+    if (warehouseId) {
+      payload.warehouseId = warehouseId;
+    }
 
     const token = createAccessToken(payload);
     const { token: refreshToken } = createRefreshToken(user._id);
@@ -582,6 +596,11 @@ exports.refresh = async (req, res) => {
     const roleKey = user.admin ? 'admin' : user.manager ? 'manager' : user.staff ? 'staff' : user.accounter ? 'accounter' : null;
     const isSuperAdmin = roleKey === 'admin' && !!user.admin?.isSuperAdmin;
     const newPayload = { sub: user._id, role: user.role || roleKey, roleKey, isSuperAdmin };
+    const roleData = roleKey ? user[roleKey] : null;
+    const warehouseId = normalizeWarehouseId(roleData?.warehouseId);
+    if (warehouseId) {
+      newPayload.warehouseId = warehouseId;
+    }
 
     const newAccessToken = createAccessToken(newPayload);
 

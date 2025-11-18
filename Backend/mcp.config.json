@@ -1,0 +1,26 @@
+{
+    "connections": {
+      "default": {
+        "uri": "process.env.DB_URI",
+        "database": "Warehouses",
+        "collections": [
+          "products",
+          "auditlogs",
+          "categories",
+          "customers",
+          "exportreceipts",
+          "importreceipts",
+          "invoices",
+          "suppliers",
+          "targets",
+          "warehouses"
+        ]
+      }
+    },
+    "options": {
+      "maxDocs": 500,
+      "enableVectorSearch": false,
+      "excludedCollections": ["sessions", "tokens", "users"]
+    }
+  }
+  

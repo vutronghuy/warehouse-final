@@ -11,7 +11,6 @@ const exportDetailSchema = new Schema(
     productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
-    batchNumber: { type: String, trim: true },
     notes: { type: String, trim: true },
   },
   { timestamps: false }

@@ -91,6 +91,9 @@ class SocketService {
     this.emitToRoom('managers', 'invoice-approved', notification);
     this.emitToRoom('admins', 'invoice-approved', notification);
     this.emitToRoom('admin_super', 'invoice-approved', notification);
+    
+    // Gửi đến accounters để cập nhật real-time pending list
+    this.emitToRoom('accounters', 'invoice-approved', notification);
     console.log('📢 Invoice approved notification sent to all roles');
   }
 
@@ -108,6 +111,9 @@ class SocketService {
     this.emitToRoom('managers', 'invoice-rejected', notification);
     this.emitToRoom('admins', 'invoice-rejected', notification);
     this.emitToRoom('admin_super', 'invoice-rejected', notification);
+    
+    // Gửi đến accounters để cập nhật real-time pending list
+    this.emitToRoom('accounters', 'invoice-rejected', notification);
     console.log('📢 Invoice rejected notification sent to all roles');
   }
 
@@ -135,9 +141,27 @@ class SocketService {
       timestamp: new Date()
     };
 
-    // Gửi đến staff
+    // Gửi đến staff, managers và admins
     this.emitToRoom('staff', 'export-approved', notification);
-    console.log('📢 Export approved notification sent to staff');
+    this.emitToRoom('managers', 'export-approved', notification);
+    this.emitToRoom('admins', 'export-approved', notification);
+    console.log('📢 Export approved notification sent to staff, managers and admins');
+  }
+
+  notifyExportRejected(exportData) {
+    const notification = {
+      type: 'export_rejected',
+      title: '❌ Export Bị Từ Chối',
+      message: `Export ${exportData.receiptNumber || exportData._id} - ${exportData.customerName || 'Khách hàng không xác định'} đã bị admin từ chối`,
+      data: exportData,
+      timestamp: new Date()
+    };
+
+    // Gửi đến staff, managers và admins
+    this.emitToRoom('staff', 'export-rejected', notification);
+    this.emitToRoom('managers', 'export-rejected', notification);
+    this.emitToRoom('admins', 'export-rejected', notification);
+    console.log('📢 Export rejected notification sent to staff, managers and admins');
   }
 
   notifyLowStock(productData) {

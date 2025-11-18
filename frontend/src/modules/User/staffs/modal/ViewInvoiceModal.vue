@@ -1,19 +1,16 @@
 <template>
   <div
     v-if="visible"
-    class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+    class="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4"
     @keydown.esc.prevent="onClose"
     tabindex="-1"
   >
-    <div
-      ref="printArea"
-      class="relative top-16 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white"
-      @click.self.stop
-    >
-      <div class="flex justify-between items-start gap-4">
+    <div class="w-full max-w-6xl max-h-[90vh] bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+      <!-- Modal Header - Fixed -->
+      <div class="flex justify-between items-start gap-4 p-6 border-b border-gray-200 bg-white">
         <div>
           <h3 class="text-xl font-semibold text-gray-900">Invoice {{ invoice?.invoiceNumber || '' }}</h3>
-          <div class="mt-1" v-if="!isPrinting">
+          <div class="mt-1">
             <span class="font-medium mr-2">Status:</span>
             <span
               v-if="invoice?.status"
@@ -27,7 +24,7 @@
             <span v-else class="text-sm text-gray-500">—</span>
           </div>
         </div>
-        <div class="flex items-center gap-2" v-if="!isPrinting">
+        <div class="flex items-center gap-2">
           <button @click="onClose" class="text-gray-400 hover:text-gray-600" aria-label="Close">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -41,7 +38,9 @@
         </div>
       </div>
 
-      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Modal Content - Scrollable -->
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Customer -->
         <div class="p-4 space-y-2 border rounded">
           <h4 class="font-medium text-gray-900 mb-2">Customer Information</h4>
@@ -127,7 +126,7 @@
       </div>
 
       <!-- Review History -->
-      <div v-if="invoice.accounterReview?.reviewedBy && !isPrinting">
+      <div v-if="invoice.accounterReview?.reviewedBy">
         <h4 class="font-medium text-gray-900 mb-2">Review History</h4>
         <div class="bg-green-200 p-3 rounded text-sm">
           <div>
@@ -146,10 +145,7 @@
         </div>
       </div>
       <!-- Actions -->
-      <div class="mt-4 flex justify-end gap-2" v-if="!isPrinting">
-        <button @click="downloadPdf" class="px-4 py-2 border rounded text-blue-700 hover:bg-blue-50">
-          Download PDF
-        </button>
+      <div class="mt-4 flex justify-end gap-2">
         <button
           v-if="canEdit"
           @click="onEdit"
@@ -167,15 +163,14 @@
         <button @click="onClose" class="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50">
           Close
         </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -185,8 +180,8 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'edit', 'delete', 'change-status']);
 
-const printArea = ref(null);
-const isPrinting = ref(false);
+// Scroll management
+const scrollY = ref(0); // Store scroll position for body scroll prevention
 
 const items = computed(() => {
   // invoice may contain items array, or exportReceipt items
@@ -241,6 +236,56 @@ const canDelete = computed(() => {
   return ['draft', 'rejected'].includes(s);
 });
 
+// Methods to handle body scroll
+const preventBodyScroll = () => {
+  // Store current scroll position
+  scrollY.value = window.scrollY;
+  // Apply styles to prevent scrolling
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${scrollY.value}px`;
+  document.body.style.width = '100%';
+  document.body.style.overflow = 'hidden';
+};
+
+const allowBodyScroll = () => {
+  // Remove fixed positioning
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.width = '';
+  document.body.style.overflow = '';
+  // Restore scroll position
+  if (scrollY.value !== undefined) {
+    window.scrollTo(0, scrollY.value);
+  }
+};
+
+// Watch visible prop to handle body scroll
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) {
+      // Prevent body scroll when modal opens
+      preventBodyScroll();
+    } else {
+      // Allow body scroll when modal closes
+      allowBodyScroll();
+    }
+  },
+);
+
+// Lifecycle hooks
+onMounted(() => {
+  // Prevent body scroll if modal is already visible
+  if (props.visible) {
+    preventBodyScroll();
+  }
+});
+
+onUnmounted(() => {
+  // Ensure body scroll is restored when component is destroyed
+  allowBodyScroll();
+});
+
 function onClose() {
   emit('close');
 }
@@ -257,81 +302,5 @@ function formatDateTime(dateString) {
 function confirmDelete() {
   if (!confirm('Are you sure you want to delete this invoice?')) return;
   emit('delete', props.invoice);
-}
-
-async function downloadPdf() {
-  try {
-    const element = printArea.value;
-    if (!element) return;
-
-    isPrinting.value = true;
-    await new Promise((r) => requestAnimationFrame(() => r()));
-
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-    });
-
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const usableWidth = pageWidth - margin * 2;
-
-    const imgWidth = usableWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    let positionY = margin;
-    let remainingHeight = imgHeight;
-    let renderedHeight = 0;
-
-    // Add image across pages if longer than one page
-    const imgProps = { format: 'PNG' };
-    while (remainingHeight > 0) {
-      const sliceHeight = Math.min(remainingHeight, pageHeight - margin * 2);
-      // Calculate the source y for the slice
-      const sourceY = (renderedHeight * canvas.width) / imgWidth;
-
-      // Create a temporary canvas for the slice
-      const sliceCanvas = document.createElement('canvas');
-      sliceCanvas.width = canvas.width;
-      sliceCanvas.height = (sliceHeight * canvas.width) / imgWidth;
-      const ctx = sliceCanvas.getContext('2d');
-      ctx.drawImage(
-        canvas,
-        0,
-        sourceY,
-        canvas.width,
-        sliceCanvas.height,
-        0,
-        0,
-        sliceCanvas.width,
-        sliceCanvas.height
-      );
-      const sliceData = sliceCanvas.toDataURL('image/png');
-
-      if (positionY !== margin) {
-        pdf.addPage();
-        positionY = margin;
-      }
-      const sliceRenderedHeight = sliceHeight;
-      pdf.addImage(sliceData, 'PNG', margin, positionY, imgWidth, sliceRenderedHeight, undefined, 'FAST');
-
-      renderedHeight += sliceRenderedHeight;
-      remainingHeight = imgHeight - renderedHeight;
-    }
-
-    const filename = `invoice-${props.invoice?.invoiceNumber || 'export'}.pdf`;
-    pdf.save(filename);
-  } catch (err) {
-    console.error('Failed to generate PDF:', err);
-    alert('Không thể xuất PDF. Vui lòng thử lại.');
-  }
-  finally {
-    isPrinting.value = false;
-  }
 }
 </script>

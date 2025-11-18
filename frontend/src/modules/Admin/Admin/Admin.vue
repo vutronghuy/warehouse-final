@@ -148,6 +148,9 @@
         </div>
       </main>
     </div>
+
+    <!-- ChatBot Component -->
+    <ChatBot />
   </div>
   <div v-if="isDropdownOpen" @click="closeDropdown" class="fixed inset-0 z-40"></div>
 </template>
@@ -156,6 +159,9 @@
 import axios from 'axios';
 import AdminSidebar from './sidebar.vue';
 import HeadBar from './headbar.vue';
+import { ChatBot } from '@/components';
+import { useNotificationStore } from '@/store/modules/notification/slice';
+import socketService from '@/services/socketService';
 
 // Add axios interceptor to prevent caching for user endpoints
 axios.interceptors.request.use((config) => {
@@ -178,6 +184,13 @@ export default {
   components: {
     AdminSidebar,
     HeadBar,
+    ChatBot,
+  },
+  setup() {
+    const notificationStore = useNotificationStore();
+    return {
+      notificationStore,
+    };
   },
   data() {
     return {
@@ -190,6 +203,12 @@ export default {
       showUserMenu: false,
       currentUserObj: null,
       warehouses: [],
+      isNotifOpen: false,
+      pendingReviews: [],
+      pollTimer: null,
+      showNewNotice: false,
+      isFirstLoad: true,
+      hasViewedNotifications: false,
     };
   },
   computed: {
@@ -230,6 +249,9 @@ export default {
         .toUpperCase()
         .slice(0, 2);
     },
+    unreadExportCount() {
+      return this.notificationStore.unreadCount;
+    },
   },
   watch: {
     search() {
@@ -238,7 +260,7 @@ export default {
   },
   created() {
     // set baseURL here (component-level override)
-    axios.defaults.baseURL = 'http://localhost:3001';
+    axios.defaults.baseURL = 'http://localhost:3003';
 
     // ensure Authorization header exists if token present
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -262,10 +284,35 @@ export default {
     this.fetchWarehouses();
   },
   mounted() {
-    document.addEventListener('click', this.handleDocClick);
+    // Clear all notifications on page load/reload
+    this.notificationStore.clearOnPageLoad();
+
+    this.fetchPendingReviews();
+
+    // Initialize Socket.IO connection
+    this.initializeSocket();
+
+    // Watch for notification changes
+    this.$watch(
+      () => this.notificationStore.unreadCount,
+      (newCount, oldCount) => {
+        if (newCount > oldCount) {
+          this.showNewNotice = true;
+        }
+      },
+    );
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleDocClick);
+
+    // Disconnect Socket.IO
+    socketService.disconnect();
+
+    // Clear polling timer if exists
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   },
 
   methods: {
@@ -435,6 +482,76 @@ export default {
     },
     nextPage() {
       if (this.currentPage < this.totalPages) this.currentPage++;
+    },
+
+    // Notification methods
+    toggleNotif() {
+      this.isNotifOpen = !this.isNotifOpen;
+      if (this.isNotifOpen) {
+        this.showNewNotice = false;
+        this.markAllNotificationsAsRead();
+        this.notificationStore.unreadCount = 0;
+        this.hasViewedNotifications = true;
+        this.isFirstLoad = true;
+      }
+    },
+    markNotificationAsRead(notificationId) {
+      this.notificationStore.markAsRead(notificationId);
+    },
+    markAllNotificationsAsRead() {
+      this.notificationStore.markAllAsRead();
+    },
+    deleteNotification(notificationId) {
+      this.notificationStore.deleteNotification(notificationId);
+    },
+    deleteExportReview(exportId) {
+      this.pendingReviews = this.pendingReviews.filter((r) => r._id !== exportId);
+    },
+    formatTime(timestamp) {
+      const now = new Date();
+      const time = new Date(timestamp);
+      const diffInMinutes = Math.floor((now - time) / (1000 * 60));
+
+      if (diffInMinutes < 1) return 'Vừa xong';
+      if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
+      return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+    },
+    initializeSocket() {
+      const socket = socketService.connect();
+
+      if (socket) {
+        socket.emit('join-room', 'admins');
+      }
+
+      socketService.on('export-created', (data) => {
+        console.log('Admin received export-created:', data);
+        this.showNewNotice = true;
+        this.hasViewedNotifications = false;
+      });
+
+      if (!socket || socketService.isFallbackMode()) {
+        console.log('🔄 Socket.IO not available, using polling fallback');
+        this.enablePollingFallback();
+      }
+    },
+    enablePollingFallback() {
+      this.pollTimer = setInterval(() => {
+        this.fetchPendingReviews();
+      }, 30000);
+    },
+    async fetchPendingReviews() {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await axios.get('/api/export-receipts', {
+          params: { status: 'created', limit: 20 },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const list = response.data?.exportReceipts || [];
+        this.pendingReviews = list;
+      } catch (e) {
+        console.warn('Failed to load pending export reviews', e);
+      }
     },
   },
 };

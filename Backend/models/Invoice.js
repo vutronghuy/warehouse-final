@@ -185,7 +185,7 @@ InvoiceSchema.pre('save', function(next) {
   next();
 });
 
-// Static method để tạo invoice number
+// Static method để tạo invoice number với retry logic để tránh duplicate
 InvoiceSchema.statics.generateInvoiceNumber = async function() {
   const today = new Date();
   const year = today.getFullYear();
@@ -194,22 +194,49 @@ InvoiceSchema.statics.generateInvoiceNumber = async function() {
   
   const prefix = `INV-${year}-${month}-${day}`;
   
-  // Tìm invoice cuối cùng trong ngày
-  const lastInvoice = await this.findOne({
-    invoiceNumber: { $regex: `^${prefix}` }
-  }).sort({ invoiceNumber: -1 });
+  // Retry logic để tránh race condition
+  let attempts = 0;
+  const maxAttempts = 10;
   
-  let sequence = 1;
-  if (lastInvoice) {
-    const lastSequence = parseInt(lastInvoice.invoiceNumber.split('-').pop());
-    sequence = lastSequence + 1;
+  while (attempts < maxAttempts) {
+    try {
+      // Tìm invoice cuối cùng trong ngày
+      const lastInvoice = await this.findOne({
+        invoiceNumber: { $regex: `^${prefix}` }
+      }).sort({ invoiceNumber: -1 });
+      
+      let sequence = 1;
+      if (lastInvoice) {
+        const lastSequence = parseInt(lastInvoice.invoiceNumber.split('-').pop());
+        sequence = lastSequence + 1;
+      }
+      
+      const invoiceNumber = `${prefix}-${String(sequence).padStart(4, '0')}`;
+      
+      // Kiểm tra xem invoice number đã tồn tại chưa
+      const existingInvoice = await this.findOne({ invoiceNumber });
+      if (!existingInvoice) {
+        return invoiceNumber;
+      }
+      
+      // Nếu đã tồn tại, tăng sequence và thử lại
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 10)); // Delay ngắn để tránh race condition
+      
+    } catch (error) {
+      console.error('Error generating invoice number:', error);
+      attempts++;
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique invoice number after multiple attempts');
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
   }
   
-  return `${prefix}-${String(sequence).padStart(4, '0')}`;
+  throw new Error('Failed to generate unique invoice number');
 };
 
-// Index cho performance
-InvoiceSchema.index({ invoiceNumber: 1 });
+// Index cho performance - invoiceNumber index is automatically created by unique: true
 InvoiceSchema.index({ exportReceiptId: 1 });
 InvoiceSchema.index({ warehouseId: 1 });
 InvoiceSchema.index({ createdByStaff: 1 });

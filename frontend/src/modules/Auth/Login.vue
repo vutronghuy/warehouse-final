@@ -103,6 +103,8 @@
                   </svg>
                 </button>
               </div>
+
+
               <!-- Password Error -->
               <Transition name="error">
                 <p v-if="passwordError" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -144,7 +146,15 @@
                 </li>
                 <li v-if="!formData.password.trim()" class="flex items-center">
                   <span class="w-1 h-1 bg-gray-400 rounded-full mr-2"></span>
-                  Enter your password
+                  Enter your password (minimum 6 characters)
+                </li>
+                <li v-if="emailError" class="flex items-center text-red-600 dark:text-red-400">
+                  <span class="w-1 h-1 bg-red-400 rounded-full mr-2"></span>
+                  {{ emailError }}
+                </li>
+                <li v-if="passwordError" class="flex items-center text-red-600 dark:text-red-400">
+                  <span class="w-1 h-1 bg-red-400 rounded-full mr-2"></span>
+                  {{ passwordError }}
                 </li>
               </ul>
             </div>
@@ -184,7 +194,7 @@
   </section>
 </template>
 
-<script lang="ts" setup>
+<script setup>
 import { reactive, computed, ref } from 'vue';
 import axios from 'axios';
 import { useRouter, useRoute } from 'vue-router';
@@ -212,22 +222,26 @@ const isFormValid = computed(() => {
          !passwordError.value;
 });
 
+// Enhanced email validation with better regex
 const validateEmail = () => {
-  // accept email or username (simple)
   if (!formData.email.trim()) {
     emailError.value = 'Email or username is required';
     return;
   }
-  // if contains "@", validate as email
+
+  // If contains "@", validate as email with comprehensive regex
   if (formData.email.includes('@')) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // More comprehensive email regex
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
     if (!emailRegex.test(formData.email)) {
       emailError.value = 'Please enter a valid email address';
       return;
     }
   }
+
   emailError.value = '';
 };
+
 
 const validatePassword = () => {
   if (!formData.password.trim()) {
@@ -251,21 +265,28 @@ const togglePasswordVisibility = () => {
 };
 
 // ---------- helpers ----------
-function parseJwt(token: string): any | null {
+const parseJwt = (token) => {
   try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const base64Url = parts[1];
+    if (!base64Url) return null;
+
+    // Sử dụng cách tiếp cận khác để tránh lỗi TypeScript
+    let base64 = base64Url;
+    base64 = base64.split('-').join('+');
+    base64 = base64.split('_').join('/');
+
+    // Add padding if needed
+    const paddedBase64 = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const jsonPayload = atob(paddedBase64);
     return JSON.parse(jsonPayload);
   } catch (e) {
     return null;
   }
-}
+};
 
-// replace existing handleSubmit with this
-// replace existing handleSubmit with this
 const handleSubmit = async () => {
   // client validation
   validateEmail();
@@ -291,9 +312,9 @@ const handleSubmit = async () => {
     }
 
     // Prefer server-provided user object for routing (safer)
-    let routeTo: string = '/'; // Initialize with default route instead of null
+    let routeTo = '/'; // Initialize with default route instead of null
     let isSuper = false;
-    let roleKey: string | null = null;
+    let roleKey = null;
 
     if (user) {
       // server should return user with root `role` and the active subdoc (admin/manager/...)
@@ -310,7 +331,7 @@ const handleSubmit = async () => {
     }
 
     // Check if there's a redirect parameter
-    const redirectPath = route.query.redirect as string;
+    const redirectPath = route.query.redirect;
 
     // map to route
     if (redirectPath) {
@@ -349,7 +370,7 @@ const handleSubmit = async () => {
     // Redirect - routeTo is guaranteed to be a string now
     await router.push(routeTo);
 
-  } catch (err: any) {
+  } catch (err) {
     console.error('Login error:', err);
     const serverMessage = err?.response?.data?.message || err?.message || 'Login failed. Please try again.';
     errorMessage.value = serverMessage;

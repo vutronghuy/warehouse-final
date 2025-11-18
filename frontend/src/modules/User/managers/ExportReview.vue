@@ -212,10 +212,6 @@
           @submit="onReviewSubmit"
         />
 
-        <!-- Success/Error Messages -->
-        <div v-if="message" :class="messageClass" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50">
-          {{ message }}
-        </div>
       </div>
     </div>
   </div>
@@ -223,6 +219,7 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from 'vue-toastification';
 import ManagerSidebar from './ManagerSidebar.vue';
 import ManagerHeader from './managerHeader.vue';
 import ViewReceiptModal from './ViewReceiptModal.vue';
@@ -236,12 +233,14 @@ export default {
     ViewReceiptModal,
     ReviewModal,
   },
+  setup() {
+    const toast = useToast();
+    return { toast };
+  },
   data() {
     return {
       isLoading: false,
       isSubmitting: false,
-      message: '',
-      messageType: '',
       userInfo: null,
       exportReceipts: [],
       pagination: null,
@@ -257,13 +256,6 @@ export default {
       reviewAction: '',
       reviewComment: '',
     };
-  },
-  computed: {
-    messageClass() {
-      return this.messageType === 'success'
-        ? 'bg-green-50 text-green-800 border border-green-200'
-        : 'bg-red-50 text-red-800 border border-red-200';
-    },
   },
   mounted() {
     this.loadUserInfo();
@@ -312,7 +304,7 @@ export default {
         this.pagination = response.data.pagination;
       } catch (error) {
         console.error('Error fetching export receipts:', error);
-        this.showMessage('Failed to load export receipts', 'error');
+        this.toast.error('Không thể tải danh sách phiếu xuất');
       } finally {
         this.isLoading = false;
       }
@@ -401,15 +393,17 @@ export default {
         );
 
         if (response.data?.success) {
-          this.showMessage(`Export receipt ${this.reviewAction}d successfully!`, 'success');
+          this.toast.success(
+            `The export voucher has been ${this.reviewAction === 'approve' ? 'approveed' : 'rejected'} successfully!`,
+          );
           this.closeReviewModal();
           this.fetchExportReceipts();
         } else {
-          this.showMessage(response.data?.message || 'Operation failed', 'error');
+          this.toast.error(response.data?.message || 'Thao tác thất bại');
         }
       } catch (error) {
         console.error('Error submitting review:', error);
-        this.showMessage(error.response?.data?.message || 'Failed to submit review', 'error');
+        this.toast.error(error.response?.data?.message || 'Không thể gửi đánh giá');
       } finally {
         this.isSubmitting = false;
       }
@@ -503,13 +497,6 @@ export default {
       return isNaN(d) ? 'N/A' : d.toLocaleString();
     },
 
-    showMessage(text, type) {
-      this.message = text;
-      this.messageType = type;
-      setTimeout(() => {
-        this.message = '';
-      }, 5000);
-    },
 
     // defensive closeDropdown in case other parts call it (prevents undefined)
     closeDropdown() {

@@ -12,8 +12,7 @@ const supplierSchema = new Schema(
       type: String,
       required: true,
       unique: true,
-      trim: true,
-      uppercase: true,
+  
     },
     
     // Contact Information
@@ -107,10 +106,8 @@ const supplierSchema = new Schema(
   }
 );
 
-// Indexes
-supplierSchema.index({ code: 1 });
-supplierSchema.index({ status: 1 });
-supplierSchema.index({ "contactInfo.email": 1 });
+// Indexes - code index is automatically created by unique: true
+
 
 // Virtual for products count
 supplierSchema.virtual('productsCount', {

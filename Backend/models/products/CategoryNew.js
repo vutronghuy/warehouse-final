@@ -41,8 +41,7 @@ const categorySchema = new Schema({
   timestamps: true
 });
 
-// Indexes
-categorySchema.index({ code: 1 });
+// Indexes - code index is automatically created by unique: true
 categorySchema.index({ status: 1 });
 
 // Virtual for products count - Disabled until Product model is available

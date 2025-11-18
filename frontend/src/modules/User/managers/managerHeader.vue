@@ -18,7 +18,7 @@
           >
             <BellOutlined class="w-6 h-5 text-gray-600" />
 
-            <!-- Badge số lượng -->
+            <!-- Badge count -->
             <span
               v-if="unreadExportCount > 0"
               class="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full min-w-[20px]"
@@ -26,7 +26,7 @@
               {{ unreadExportCount }}
             </span>
 
-            <!-- Indicator chấm xanh -->
+            <!-- Green dot indicator -->
             <span
               v-if="(showNewNotice && !isNotifOpen) || notificationStore.unreadCount > 0"
               class="absolute -bottom-1 -right-1 block w-2 h-2 bg-green-500 rounded-full animate-pulse"
@@ -46,7 +46,7 @@
               v-if="isNotifOpen"
               class="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50"
             >
-              <div class="px-4 py-2 text-sm font-semibold text-gray-700">Thông báo</div>
+              <div class="px-4 py-2 text-sm font-semibold text-gray-700">Notifications</div>
 
               <!-- Real-time Notifications -->
               <div
@@ -54,7 +54,7 @@
                 class="border-b border-gray-100"
               >
                 <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-blue-50">
-                  🔔 Thông báo mới từ Staff
+                  🔔 New notifications from Staff
                 </div>
                 <ul class="max-h-40 overflow-auto">
                   <li
@@ -72,12 +72,12 @@
                       <div class="flex items-center gap-2">
                         <span
                           class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 animate-pulse"
-                          >Mới</span
+                          >New</span
                         >
                         <button
                           @click="deleteNotification(notification.id)"
                           class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                          title="Xóa thông báo"
+                          title="Delete notification"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -103,8 +103,12 @@
 
               <!-- Export Reviews -->
               <div v-if="pendingReviews.length > 0" class="border-b border-gray-100">
-                <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-yellow-50">
-                  Phiếu export chờ review
+                <div class="px-4 py-2 text-xs font-medium text-gray-600 bg-yellow-50 flex items-center justify-between">
+                  <span>Export receipts pending review</span>
+                  <div v-if="isUpdatingReviews" class="flex items-center space-x-1 text-blue-600">
+                    <div class="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                    <span class="text-xs">Updating...</span>
+                  </div>
                 </div>
                 <ul class="max-h-40 overflow-auto">
                   <li v-for="r in pendingReviews" :key="r._id" class="px-4 py-2 hover:bg-gray-50">
@@ -120,7 +124,7 @@
                         <button
                           @click="deleteExportReview(r._id)"
                           class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
-                          title="Xóa phiếu export"
+                          title="Delete export receipt"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -133,7 +137,7 @@
                         </button>
                       </div>
                     </div>
-                    <div class="text-xs text-gray-500">Khách hàng: {{ r.customerName || 'N/A' }}</div>
+                    <div class="text-xs text-gray-500">Customer: {{ r.customerName || 'N/A' }}</div>
                     <div v-if="r.createdAt" class="text-gray-400 mt-1">📅 {{ formatTime(r.createdAt) }}</div>
                   </li>
                 </ul>
@@ -143,19 +147,19 @@
                 v-if="!notificationStore.getUnreadNotifications.length"
                 class="px-4 py-3 text-sm text-gray-500"
               >
-                Không có thông báo mới
+                No new notifications
               </div>
 
               <div class="px-4 py-2 border-t border-gray-100 flex justify-between">
                 <router-link to="/manager/export-review" class="text-sm text-[#6A4C93] hover:underline"
-                  >Tới trang review</router-link
+                  >Go to review page</router-link
                 >
                 <button
                   v-if="notificationStore.unreadCount > 0"
                   @click="markAllNotificationsAsRead"
                   class="text-sm text-gray-600 hover:text-gray-800"
                 >
-                  Đánh dấu tất cả đã đọc
+                  Mark all as read
                 </button>
               </div>
             </div>
@@ -247,6 +251,7 @@ export default {
   },
   data() {
     return {
+      userInfo: null,
       isDropdownOpen: false,
       isNotifOpen: false,
       pendingReviews: [],
@@ -256,15 +261,17 @@ export default {
       isFirstLoad: true, // Track if this is the first load after page reload
       hasViewedNotifications: false, // Track if user has viewed notifications
       lastCheckTime: Date.now(), // Track last check time
+      isUpdatingReviews: false, // Track if reviews are being updated
+      updateReviewsTimeout: null, // Debounce timeout for reviews update
     };
   },
   computed: {
     userFullName() {
-      // Lấy fullName từ role-specific object
+      // Get fullName from role-specific object
       if (this.userInfo?.role === 'manager' && this.userInfo.manager?.fullName) {
         return this.userInfo.manager.fullName;
       }
-      // Fallback: lấy từ localStorage nếu có
+      // Fallback: get from localStorage if available
       const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
       if (storedUser) {
         try {
@@ -288,11 +295,16 @@ export default {
         .slice(0, 2);
     },
     unreadExportCount() {
-      // Chỉ hiển thị notification count từ store (không dựa trên pendingReviews)
-      return this.notificationStore.unreadCount;
+      // Only show notification count (notifications that haven't been viewed)
+      const count = this.notificationStore.unreadCount;
+      console.log('📊 Manager unreadExportCount computed - unread notifications:', count);
+      return count;
     },
   },
   mounted() {
+    // Load user info first
+    this.loadUserInfo();
+
     // Clear all notifications on page load/reload
     this.notificationStore.clearOnPageLoad();
 
@@ -320,6 +332,12 @@ export default {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+
+    // Clear update timeout if exists
+    if (this.updateReviewsTimeout) {
+      clearTimeout(this.updateReviewsTimeout);
+      this.updateReviewsTimeout = null;
+    }
   },
   methods: {
     toggleDropdown() {
@@ -338,6 +356,7 @@ export default {
         this.hasViewedNotifications = true;
         // Reset first load flag so old data won't create notifications
         this.isFirstLoad = true;
+        // Count will disappear when user views notifications
       }
     },
     markNotificationAsRead(notificationId) {
@@ -350,19 +369,19 @@ export default {
       this.notificationStore.deleteNotification(notificationId);
     },
     deleteExportReview(exportId) {
-      // Xóa export review khỏi danh sách pending
+      // Remove export review from pending list
       this.pendingReviews = this.pendingReviews.filter((r) => r._id !== exportId);
-      // Unread count sẽ tự động cập nhật thông qua computed property
+      // Unread count will update automatically through computed property
     },
     formatTime(timestamp) {
       const now = new Date();
       const time = new Date(timestamp);
       const diffInMinutes = Math.floor((now - time) / (1000 * 60));
 
-      if (diffInMinutes < 1) return 'Vừa xong';
-      if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
-      return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+      if (diffInMinutes < 1) return 'Just now';
+      if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+      return `${Math.floor(diffInMinutes / 1440)} days ago`;
     },
     closeDropdown() {
       this.isDropdownOpen = false;
@@ -389,9 +408,42 @@ export default {
         console.log('Manager received export-created:', data);
         this.showNewNotice = true;
         this.hasViewedNotifications = false;
+
+        // Create notification in store
+        this.notificationStore.addNotification({
+          type: 'export_created',
+          title: '📦 New Export Receipt',
+          message: `Export ${data.data?.receiptNumber || data.data?._id} - ${data.data?.customerName || 'N/A'} needs your review.`,
+          data: data.data,
+          timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+        });
+
+        // Debounced fetch updated pending reviews
+        this.debouncedFetchReviews();
       });
 
-      // Nếu Socket.IO không khả dụng, fallback về polling
+      // Listen for export-deleted events
+      socketService.on('export-deleted', (data) => {
+        console.log('Manager received export-deleted:', data);
+        // Debounced fetch updated pending reviews
+        this.debouncedFetchReviews();
+      });
+
+      // Listen for export-status-changed events
+      socketService.on('export-status-changed', (data) => {
+        console.log('Manager received export-status-changed:', data);
+        // Chỉ cập nhật danh sách, không tạo notification mới
+        this.debouncedFetchReviews();
+      });
+
+      // Listen for export-approved events (when admin approves)
+      socketService.on('export-approved', (data) => {
+        console.log('Manager received export-approved:', data);
+        // Debounced fetch updated pending reviews
+        this.debouncedFetchReviews();
+      });
+
+      // If Socket.IO not available, fallback to polling
       if (!socket || socketService.isFallbackMode()) {
         console.log('🔄 Socket.IO not available, using polling fallback');
         this.enablePollingFallback();
@@ -399,14 +451,57 @@ export default {
     },
 
     enablePollingFallback() {
-      // Fallback polling mỗi 30 giây
+      // Polling fallback every 30 seconds
       this.pollTimer = setInterval(() => {
         this.fetchPendingReviews();
       }, 30000);
     },
 
+    async loadUserInfo() {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (!token) {
+          console.warn('No token found');
+          return;
+        }
+
+        const response = await axios.get('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.data.success) {
+          this.userInfo = response.data.user;
+        }
+      } catch (error) {
+        console.error('❌ Error loading user info:', error);
+        // Fallback: try to get user info from localStorage
+        const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (storedUser) {
+          try {
+            this.userInfo = JSON.parse(storedUser);
+          } catch (e) {
+            console.error('Error parsing stored user:', e);
+          }
+        }
+      }
+    },
+
+    // Debounced function to fetch reviews
+    debouncedFetchReviews() {
+      // Clear existing timeout
+      if (this.updateReviewsTimeout) {
+        clearTimeout(this.updateReviewsTimeout);
+      }
+
+      // Set new timeout
+      this.updateReviewsTimeout = setTimeout(() => {
+        this.fetchPendingReviews();
+      }, 500); // 500ms debounce
+    },
+
     async fetchPendingReviews() {
       try {
+        this.isUpdatingReviews = true;
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         const response = await axios.get('/api/export-receipts', {
           params: { status: 'created', limit: 20 },
@@ -414,8 +509,11 @@ export default {
         });
         const list = response.data?.exportReceipts || [];
         this.pendingReviews = list;
+        console.log('✅ Pending reviews updated:', list.length);
       } catch (e) {
         console.warn('Failed to load pending export reviews', e);
+      } finally {
+        this.isUpdatingReviews = false;
       }
     },
     async handleLogout() {

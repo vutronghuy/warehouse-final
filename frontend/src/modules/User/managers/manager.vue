@@ -215,18 +215,23 @@
       </div>
     </div>
   </div>
+
+  <!-- ChatBot Component -->
+  <ChatBot />
 </template>
 
 <script>
 import axios from 'axios';
 import ManagerSidebar from './ManagerSidebar.vue';
 import ManagerHeader from './managerHeader.vue';
+import { ChatBot } from '@/components';
 
 export default {
   name: 'ManagerDashboard',
   components: {
     ManagerSidebar,
     ManagerHeader,
+    ChatBot,
   },
   data() {
     return {

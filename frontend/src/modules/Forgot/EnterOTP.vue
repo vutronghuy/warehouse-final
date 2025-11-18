@@ -1,92 +1,140 @@
 <template>
-  <div class="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-      <!-- Back Button -->
-      <div class="mb-8">
-        <button @click="goBack" class="flex items-center text-gray-600 hover:text-gray-800 transition-colors">
-          <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+  <section class="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden">
+    <div
+      class="absolute inset-0 bg-[url('/img/logo1.jpeg')] bg-cover bg-center bg-no-repeat"
+      style="background-position: 80% 50%"
+    >
+      <div class="absolute inset-0 bg-black/40 dark:bg-black/60"></div>
+    </div>
+
+    <div
+      class="relative z-10 flex flex-col items-center justify-center px-6 py-8 mx-auto min-h-screen lg:py-0"
+    >
+      <a
+        href="#"
+        class="flex items-center mb-6 text-3xl font-semibold text-white drop-shadow-lg no-underline"
+      >
+        <img class="w-8 h-8 mr-2" src="/img/logo.png" alt="logo" />
+        HinWarehouse
+      </a>
+
+      <div
+        class="relative w-full bg-[#a89cae] backdrop-blur-sm rounded-xl shadow-2xl dark:border sm:max-w-md xl:p-0 dark:bg-gray-800/95 dark:border-gray-700 border border-white/20"
+      >
+        <div
+          class="hidden sm:flex absolute top-8 -left-16 items-center gap-2 text-sm font-medium text-white/90 px-20 py-3 rounded-full transition-colors cursor-pointer"
+          @click="goBack"
+        >
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
           </svg>
-        </button>
-      </div>
+        </div>
 
-      <!-- Title -->
-      <div class="text-center mb-8">
-        <h2 class="text-2xl font-semibold text-gray-900 mb-6">Nhập mã xác nhận</h2>
+        <div class="p-6 space-y-6 sm:p-8">
+          <div class="space-y-3">
+            <div
+              class="sm:hidden flex items-center gap-2 text-sm font-medium text-white/90 bg-black/30 hover:bg-black/60 px-4 py-2 rounded-full transition-colors shadow-lg"
+              @click="goBack"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                ></path>
+              </svg>
+            </div>
+            <div class="text-center sm:text-left">
+              <h2 class="text-2xl text-center font-semibold text-white">Nhập mã xác nhận</h2>
+              <p class="text-sm text-center text-white/80 mt-2">
+                Mã xác minh đã được gửi tới
+                <span class="font-semibold">{{ email }}</span>
+              </p>
+            </div>
+          </div>
 
-        <!-- Email Info -->
-        <div class="mb-6">
-          <p class="text-gray-600 text-sm mb-2">Mã xác minh đã được gửi đến Email</p>
-          <p class="text-gray-800 font-medium break-words">{{ email }}</p>
+          <div class="flex justify-center flex-wrap gap-3">
+            <input
+              v-for="(digit, index) in otpDigits"
+              :key="index"
+              :ref="el => otpInputs[index] = el"
+              :value="otpDigits[index]"
+              @input="handleInput(index, $event)"
+              @keydown="handleKeydown(index, $event)"
+              @paste="handlePaste($event)"
+              type="text"
+              maxlength="1"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              :aria-label="`Mã xác nhận chữ số ${index + 1}`"
+              pattern="[0-9]*"
+              class="w-12 h-14 text-center text-xl font-semibold bg-white/80 text-gray-900 border border-white/50 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-all shadow-sm"
+            />
+          </div>
+
+          <div class="text-center text-white/90">
+            <p class="text-sm">
+              <span v-if="timeLeft > 0">
+                Vui lòng chờ <span class="font-semibold">{{ timeLeft }}s</span> để gửi lại.
+              </span>
+              <span v-else class="inline-flex items-center gap-1">
+                Không nhận được mã?
+                <button
+                  type="button"
+                  @click="resendCode"
+                  :disabled="isLoading || timeLeft > 0"
+                  class="text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer bg-transparent border-0 p-0 underline-offset-2 cursor-pointer"
+                >
+                  Gửi lại
+                </button>
+              </span>
+            </p>
+          </div>
+
+          <button
+            type="button"
+            @click="verifyOTP"
+            :disabled="!isOTPComplete || isLoading"
+            :class="[
+              'w-full font-medium rounded-lg text-sm px-5 py-3 text-center transition-all duration-200 transform',
+              isOTPComplete && !isLoading
+                ? 'text-white bg-[#4b3636] hover:scale-[1.02] active:scale-[0.98] focus:ring-4 focus:outline-none focus:ring-blue-300'
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            ]"
+          >
+            <span v-if="!isLoading">Kế tiếp</span>
+            <span v-else class="flex items-center justify-center">
+              <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Đang xác minh...
+            </span>
+          </button>
+
+          <div
+            v-if="errorMessage"
+            class="p-4 bg-red-100/80 border border-red-400 text-red-700 rounded-lg text-sm text-center"
+          >
+            {{ errorMessage }}
+          </div>
+
+          <div
+            v-if="successMessage"
+            class="p-4 bg-green-100/80 border border-green-400 text-green-800 rounded-lg text-sm text-center"
+          >
+            {{ successMessage }}
+          </div>
         </div>
       </div>
-
-      <!-- OTP Input Fields -->
-      <div class="flex justify-center space-x-3 mb-8">
-        <input
-          v-for="(digit, index) in otpDigits"
-          :key="index"
-          :ref="el => otpInputs[index] = el"
-          :value="otpDigits[index]"
-          @input="handleInput(index, $event)"
-          @keydown="handleKeydown(index, $event)"
-          @paste="handlePaste($event)"
-          type="text"
-          maxlength="1"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          :aria-label="`Mã xác nhận chữ số ${index + 1}`"
-          pattern="[0-9]*"
-          class="w-12 h-12 text-center text-xl font-semibold border-2 border-gray-300 rounded-lg focus:border-red-400 focus:outline-none transition-colors bg-gray-50"
-        />
-      </div>
-
-      <!-- Timer and Resend -->
-      <div class="text-center mb-8">
-        <p class="text-gray-500 text-sm">
-          <span v-if="timeLeft > 0">
-            Vui lòng chờ {{ timeLeft }} giây để gửi lại.
-          </span>
-          <span v-else>
-            Không nhận được mã?
-            <button
-              @click="resendCode"
-              :disabled="isLoading || timeLeft > 0"
-              class="text-red-400 hover:text-red-500 font-medium ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Gửi lại
-            </button>
-          </span>
-        </p>
-      </div>
-
-      <!-- Submit Button -->
-      <button
-        @click="verifyOTP"
-        :disabled="!isOTPComplete || isLoading"
-        class="w-full bg-red-400 hover:bg-red-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
-      >
-        <span v-if="!isLoading">KẾ TIẾP</span>
-        <span v-else class="flex items-center justify-center">
-          <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          Đang xác minh...
-        </span>
-      </button>
-
-      <!-- Error Message -->
-      <div v-if="errorMessage" class="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm text-center">
-        {{ errorMessage }}
-      </div>
-
-      <!-- Success Message -->
-      <div v-if="successMessage" class="mt-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm text-center">
-        {{ successMessage }}
-      </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script>

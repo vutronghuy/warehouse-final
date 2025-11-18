@@ -1,202 +1,200 @@
 <template>
   <div class="space-y-6">
-    <!-- Header -->
-    <div class="flex justify-between items-center">
-      <div>
-        <h2 class="text-2xl font-bold text-gray-900">Invoice Review</h2>
-        <p class="text-sm text-gray-600">Review and approve invoices from staff</p>
-      </div>
-    </div>
-
+    <AccounterSidebar />
+    <AccounterHeader />
     <!-- Tabs -->
-    <div class="bg-white shadow rounded-lg">
-      <div class="border-b border-gray-200">
-        <nav class="-mb-px flex space-x-8 px-6">
-          <button @click="activeTab = 'pending'" :class="tabClass('pending')">
-            Pending Review
-            <span
-              v-if="pendingCount > 0"
-              class="ml-2 bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full"
-            >
-              {{ pendingCount }}
-            </span>
-          </button>
-          <button @click="activeTab = 'approved'" :class="tabClass('approved')">Approved Invoices</button>
-          <button @click="activeTab = 'rejected'" :class="tabClass('rejected')">Rejected Invoices</button>
-        </nav>
-      </div>
-
-      <!-- Content -->
-      <div class="p-6">
-        <!-- Search and Filter -->
-        <div class="mb-4 flex gap-4">
-          <div class="flex-1">
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search by invoice number, customer name..."
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button
-            @click="loadInvoices"
-            :disabled="isLoading"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {{ isLoading ? 'Loading...' : 'Refresh' }}
-          </button>
-        </div>
-
-        <!-- Invoices Table -->
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Invoice Number
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created By
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Due Date
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="invoice in filteredInvoices" :key="invoice._id">
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {{ invoice.invoiceNumber }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="text-sm text-gray-900">{{ invoice.customerName }}</div>
-                  <div class="text-sm text-gray-500">{{ invoice.customerPhone }}</div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ invoice.createdByStaff?.staff?.fullName || 'N/A' }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ formatCurrency(invoice.finalAmount) }} {{ invoice.currency }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDate(invoice.dueDate) }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span :class="getStatusClass(invoice.status)">{{ formatStatus(invoice.status) }}</span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <button @click="viewInvoiceDetail(invoice)" class="text-blue-600 hover:text-blue-900">
-                    View
-                  </button>
-                  <button
-                    v-if="invoice.status === 'pending_review'"
-                    @click="openReviewModal(invoice, 'approve')"
-                    class="text-green-600 hover:text-green-900"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    v-if="invoice.status === 'pending_review'"
-                    @click="openReviewModal(invoice, 'reject')"
-                    class="text-red-600 hover:text-red-900"
-                  >
-                    Reject
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Empty State -->
-        <div v-if="filteredInvoices.length === 0" class="text-center py-8">
-          <p class="text-gray-500">No invoices found</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Review Modal -->
-    <div
-      v-if="showReviewModal"
-      class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
-    >
-      <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
-        <div class="mt-3">
-          <h3 class="text-lg font-medium text-gray-900 mb-4">
-            {{ reviewAction === 'approve' ? 'Approve' : 'Reject' }} Invoice
-          </h3>
-
-          <!-- Invoice Summary -->
-          <div v-if="selectedInvoice" class="bg-gray-50 p-4 rounded-lg mb-4">
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div><span class="font-medium">Invoice Number:</span> {{ selectedInvoice.invoiceNumber }}</div>
-              <div><span class="font-medium">Customer:</span> {{ selectedInvoice.customerName }}</div>
-              <div>
-                <span class="font-medium">Amount:</span> {{ formatCurrency(selectedInvoice.finalAmount) }}
-                {{ selectedInvoice.currency }}
-              </div>
-              <div><span class="font-medium">Due Date:</span> {{ formatDate(selectedInvoice.dueDate) }}</div>
-            </div>
-          </div>
-
-          <!-- Review Form -->
-          <form @submit.prevent="submitReview" class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2"
-                >{{ reviewAction === 'approve' ? 'Approval' : 'Rejection' }} Comment</label
+    <div class="ml-64 py-8">
+      <div class="bg-white shadow rounded-lg">
+        <div class="border-b border-gray-200">
+          <nav class="-mb-px flex space-x-8 px-6">
+            <button @click="activeTab = 'pending'" :class="tabClass('pending')">
+              Pending Review
+              <span
+                v-if="pendingCount > 0"
+                class="ml-2 bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full"
               >
-              <textarea
-                v-model="reviewComment"
-                rows="4"
-                :placeholder="
-                  reviewAction === 'approve'
-                    ? 'Optional approval notes...'
-                    : 'Please provide reason for rejection...'
-                "
-                :required="reviewAction === 'reject'"
+                {{ pendingCount }}
+              </span>
+            </button>
+            <button @click="activeTab = 'approved'" :class="tabClass('approved')">Approved Invoices</button>
+            <button @click="activeTab = 'rejected'" :class="tabClass('rejected')">Rejected Invoices</button>
+          </nav>
+        </div>
+
+        <!-- Content -->
+        <div class="p-6">
+          <!-- Search and Filter -->
+          <div class="mb-4 flex gap-4">
+            <div class="flex-1">
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search by invoice number, customer name..."
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              ></textarea>
+              />
+            </div>
+            <button
+              @click="loadInvoices"
+              :disabled="isLoading"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {{ isLoading ? 'Loading...' : 'Refresh' }}
+            </button>
+          </div>
+
+          <!-- Invoices Table -->
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Invoice Number
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Customer
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created By
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Amount
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Due Date
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="invoice in filteredInvoices" :key="invoice._id">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {{ invoice.invoiceNumber }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">{{ invoice.customerName }}</div>
+                    <div class="text-sm text-gray-500">{{ invoice.customerPhone }}</div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ invoice.createdByStaff?.staff?.fullName || 'N/A' }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ formatCurrency(invoice.finalAmount) }} {{ invoice.currency }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ formatDate(invoice.dueDate) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span :class="getStatusClass(invoice.status)">{{ formatStatus(invoice.status) }}</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <button @click="viewInvoiceDetail(invoice)" class="text-blue-600 hover:text-blue-900">
+                      View
+                    </button>
+                    <button
+                      v-if="invoice.status === 'pending_review'"
+                      @click="openReviewModal(invoice, 'approve')"
+                      class="text-green-600 hover:text-green-900"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      v-if="invoice.status === 'pending_review'"
+                      @click="openReviewModal(invoice, 'reject')"
+                      class="text-red-600 hover:text-red-900"
+                    >
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty State -->
+          <div v-if="filteredInvoices.length === 0" class="text-center py-8">
+            <p class="text-gray-500">No invoices found</p>
+          </div>
+        </div>
+      </div>
+      <!-- Review Modal -->
+      <div
+        v-if="showReviewModal"
+        class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+      >
+        <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+          <div class="mt-3">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">
+              {{ reviewAction === 'approve' ? 'Approve' : 'Reject' }} Invoice
+            </h3>
+
+            <!-- Invoice Summary -->
+            <div v-if="selectedInvoice" class="bg-gray-50 p-4 rounded-lg mb-4">
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="font-medium">Invoice Number:</span> {{ selectedInvoice.invoiceNumber }}
+                </div>
+                <div><span class="font-medium">Customer:</span> {{ selectedInvoice.customerName }}</div>
+                <div>
+                  <span class="font-medium">Amount:</span> {{ formatCurrency(selectedInvoice.finalAmount) }}
+                  {{ selectedInvoice.currency }}
+                </div>
+                <div>
+                  <span class="font-medium">Due Date:</span> {{ formatDate(selectedInvoice.dueDate) }}
+                </div>
+              </div>
             </div>
 
-            <!-- Actions -->
-            <div class="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                @click="closeReviewModal"
-                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                :disabled="isSubmitting"
-                :class="[
-                  'px-4 py-2 rounded-lg text-white disabled:opacity-50',
-                  reviewAction === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-red-600 hover:bg-red-700',
-                ]"
-              >
-                {{ isSubmitting ? 'Processing...' : reviewAction === 'approve' ? 'Approve' : 'Reject' }}
-              </button>
-            </div>
-          </form>
+            <!-- Review Form -->
+            <form @submit.prevent="submitReview" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2"
+                  >{{ reviewAction === 'approve' ? 'Approval' : 'Rejection' }} Comment</label
+                >
+                <textarea
+                  v-model="reviewComment"
+                  rows="4"
+                  :placeholder="
+                    reviewAction === 'approve'
+                      ? 'Optional approval notes...'
+                      : 'Please provide reason for rejection...'
+                  "
+                  :required="reviewAction === 'reject'"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                ></textarea>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  @click="closeReviewModal"
+                  class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  :disabled="isSubmitting"
+                  :class="[
+                    'px-4 py-2 rounded-lg text-white disabled:opacity-50',
+                    reviewAction === 'approve'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-red-600 hover:bg-red-700',
+                  ]"
+                >
+                  {{ isSubmitting ? 'Processing...' : reviewAction === 'approve' ? 'Approve' : 'Reject' }}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
-
     <!-- Invoice Detail Modal (separated component) -->
     <InvoiceDetailModal :visible="showDetailModal" :invoice="selectedInvoice" @close="closeDetailModal" />
   </div>
@@ -207,7 +205,8 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import InvoiceDetailModal from './InvoiceDetailModal.vue'; // adjust path as needed
 import socketService from '@/services/socketService';
-
+import AccounterHeader from './accounterHeader.vue';
+import AccounterSidebar from './accounterSidebar.vue';
 // Reactive data
 const activeTab = ref('pending');
 const invoices = ref([]);
@@ -320,7 +319,7 @@ const submitReview = async () => {
 
     if (response.data?.success) {
       // Update the invoice in the list immediately (real-time update)
-      const invoiceIndex = invoices.value.findIndex(inv => inv._id === selectedInvoice.value._id);
+      const invoiceIndex = invoices.value.findIndex((inv) => inv._id === selectedInvoice.value._id);
       if (invoiceIndex !== -1) {
         invoices.value[invoiceIndex].status = reviewAction.value === 'approve' ? 'approved' : 'rejected';
         invoices.value[invoiceIndex].reviewedAt = new Date().toISOString();
@@ -419,9 +418,62 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  // Disconnect Socket.IO when component is unmounted
-  socketService.disconnect();
+  // Clean up socket listeners for this component only
+  console.log('🧹 Cleaning up Invoice Review socket listeners...');
+  try {
+    socketService.off('invoice-approved', handleInvoiceApproved);
+    socketService.off('invoice-rejected', handleInvoiceRejected);
+    socketService.off('invoice-created', handleInvoiceCreated);
+    socketService.off('invoice-deleted', handleInvoiceDeleted);
+    console.log('✅ Invoice Review socket listeners cleaned up successfully');
+  } catch (error) {
+    console.warn('⚠️ Error cleaning up socket listeners:', error);
+  }
 });
+
+// Socket event handlers (defined as separate functions for proper cleanup)
+const handleInvoiceApproved = (data) => {
+  console.log('✅ Invoice Review - Invoice approved:', data);
+  // Update the specific invoice in the list
+  const invoiceIndex = invoices.value.findIndex((inv) => inv._id === data.data?._id);
+  if (invoiceIndex !== -1) {
+    invoices.value[invoiceIndex].status = 'approved';
+    invoices.value[invoiceIndex].reviewedAt = data.data?.reviewedAt;
+    invoices.value[invoiceIndex].reviewComment = data.data?.reviewComment;
+  }
+};
+
+const handleInvoiceRejected = (data) => {
+  console.log('❌ Invoice Review - Invoice rejected:', data);
+  // Update the specific invoice in the list
+  const invoiceIndex = invoices.value.findIndex((inv) => inv._id === data.data?._id);
+  if (invoiceIndex !== -1) {
+    invoices.value[invoiceIndex].status = 'rejected';
+    invoices.value[invoiceIndex].reviewedAt = data.data?.reviewedAt;
+    invoices.value[invoiceIndex].reviewComment = data.data?.reviewComment;
+  }
+};
+
+const handleInvoiceCreated = (data) => {
+  console.log('📄 Invoice Review - Invoice created:', data);
+  // Add new invoice to the list if it's pending review and not already exists
+  if (data.data?.status === 'pending_review') {
+    // Check if invoice already exists to prevent duplicates
+    const existingInvoice = invoices.value.find((inv) => inv._id === data.data._id);
+    if (!existingInvoice) {
+      invoices.value.unshift(data.data);
+      console.log('✅ Added new invoice to review list:', data.data._id);
+    } else {
+      console.log('⚠️ Invoice already exists in list, skipping duplicate:', data.data._id);
+    }
+  }
+};
+
+const handleInvoiceDeleted = (data) => {
+  console.log('🗑️ Invoice Review - Invoice deleted:', data);
+  // Remove invoice from the list
+  invoices.value = invoices.value.filter((inv) => inv._id !== data.data?._id);
+};
 
 // Socket.IO initialization
 const initializeSocket = () => {
@@ -434,41 +486,10 @@ const initializeSocket = () => {
     console.warn('⚠️ Socket not available, invoices will not update in real-time');
   }
 
-  // Listen for invoice events
-  socketService.on('invoice-approved', (data) => {
-    console.log('✅ Invoice Review - Invoice approved:', data);
-    // Update the specific invoice in the list
-    const invoiceIndex = invoices.value.findIndex(inv => inv._id === data.data?._id);
-    if (invoiceIndex !== -1) {
-      invoices.value[invoiceIndex].status = 'approved';
-      invoices.value[invoiceIndex].reviewedAt = data.data?.reviewedAt;
-      invoices.value[invoiceIndex].reviewComment = data.data?.reviewComment;
-    }
-  });
-
-  socketService.on('invoice-rejected', (data) => {
-    console.log('❌ Invoice Review - Invoice rejected:', data);
-    // Update the specific invoice in the list
-    const invoiceIndex = invoices.value.findIndex(inv => inv._id === data.data?._id);
-    if (invoiceIndex !== -1) {
-      invoices.value[invoiceIndex].status = 'rejected';
-      invoices.value[invoiceIndex].reviewedAt = data.data?.reviewedAt;
-      invoices.value[invoiceIndex].reviewComment = data.data?.reviewComment;
-    }
-  });
-
-  socketService.on('invoice-created', (data) => {
-    console.log('📄 Invoice Review - Invoice created:', data);
-    // Add new invoice to the list if it's pending review
-    if (data.data?.status === 'pending_review') {
-      invoices.value.unshift(data.data);
-    }
-  });
-
-  socketService.on('invoice-deleted', (data) => {
-    console.log('🗑️ Invoice Review - Invoice deleted:', data);
-    // Remove invoice from the list
-    invoices.value = invoices.value.filter(inv => inv._id !== data.data?._id);
-  });
+  // Register event handlers
+  socketService.on('invoice-approved', handleInvoiceApproved);
+  socketService.on('invoice-rejected', handleInvoiceRejected);
+  socketService.on('invoice-created', handleInvoiceCreated);
+  socketService.on('invoice-deleted', handleInvoiceDeleted);
 };
 </script>

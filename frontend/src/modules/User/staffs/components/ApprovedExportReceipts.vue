@@ -209,15 +209,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import axios from 'axios';
 
 // Props
 const props = defineProps({
   myInvoices: {
     type: Array,
-    default: () => []
-  }
+    default: () => [],
+  },
 });
 
 // Emits
@@ -231,6 +231,35 @@ const pagination = ref(null);
 const currentPage = ref(1);
 const searchTimeout = ref(null);
 const invoiceFilter = ref('all');
+
+// Computed properties
+const invoiceStatusMap = computed(() => {
+  const map = new Map();
+  if (props.myInvoices && props.myInvoices.length > 0) {
+    props.myInvoices.forEach((invoice) => {
+      const rid = invoice.exportReceiptId ? invoice.exportReceiptId._id || invoice.exportReceiptId : null;
+      if (rid) {
+        map.set(String(rid), {
+          invoiceId: invoice._id,
+          invoiceNumber: invoice.invoiceNumber,
+          status: invoice.status,
+          createdAt: invoice.createdAt,
+        });
+      }
+    });
+  }
+  console.log('Invoice status map updated:', map);
+  return map;
+});
+
+// Watch for changes in myInvoices prop
+watch(
+  () => props.myInvoices,
+  (newInvoices) => {
+    console.log('myInvoices prop updated:', newInvoices);
+  },
+  { deep: true, immediate: true },
+);
 
 // Methods
 const getUserInitials = (name) => {
@@ -249,35 +278,30 @@ const formatDate = (dateString) => {
 };
 
 const hasInvoice = (exportReceiptId) => {
-  return props.myInvoices.some((invoice) => {
-    const rid = invoice.exportReceiptId ? invoice.exportReceiptId._id || invoice.exportReceiptId : null;
-    return rid && String(rid) === String(exportReceiptId);
-  });
+  const hasInvoiceResult = invoiceStatusMap.value.has(String(exportReceiptId));
+  // Removed console.log to avoid spam - only log when debugging is needed
+  return hasInvoiceResult;
 };
 
 const getInvoiceNumber = (exportReceiptId) => {
-  const invoice = props.myInvoices.find((invoice) => {
-    const rid = invoice.exportReceiptId ? invoice.exportReceiptId._id || invoice.exportReceiptId : null;
-    return rid && String(rid) === String(exportReceiptId);
-  });
-  return invoice ? invoice.invoiceNumber : '';
+  const invoiceData = invoiceStatusMap.value.get(String(exportReceiptId));
+  return invoiceData ? invoiceData.invoiceNumber : '';
 };
 
 const getInvoiceStatus = (exportReceiptId) => {
-  const invoice = props.myInvoices.find((invoice) => {
-    const rid = invoice.exportReceiptId ? invoice.exportReceiptId._id || invoice.exportReceiptId : null;
-    return rid && String(rid) === String(exportReceiptId);
-  });
+  const invoiceData = invoiceStatusMap.value.get(String(exportReceiptId));
 
-  if (!invoice) return 'Not Created';
+  if (!invoiceData) return 'Not Created';
 
-  switch (invoice.status) {
-    case 'pending':
+  switch (invoiceData.status) {
+    case 'pending_review':
       return 'Pending Review';
     case 'approved':
       return 'Approved';
     case 'rejected':
       return 'Rejected';
+    case 'paid':
+      return 'Paid';
     default:
       return 'Created';
   }
@@ -320,9 +344,9 @@ const loadConfirmedExports = async () => {
 
       // Apply invoice filter
       if (invoiceFilter.value === 'with-invoice') {
-        exports = exports.filter(receipt => hasInvoice(receipt._id));
+        exports = exports.filter((receipt) => hasInvoice(receipt._id));
       } else if (invoiceFilter.value === 'without-invoice') {
-        exports = exports.filter(receipt => !hasInvoice(receipt._id));
+        exports = exports.filter((receipt) => !hasInvoice(receipt._id));
       }
 
       confirmedExports.value = exports;
@@ -345,6 +369,10 @@ onMounted(() => {
 
 // Expose methods for parent component
 defineExpose({
-  loadConfirmedExports
+  loadConfirmedExports,
+  refreshInvoiceStatus: () => {
+    // Force recomputation of invoice status map
+    console.log('Refreshing invoice status...');
+  },
 });
 </script>

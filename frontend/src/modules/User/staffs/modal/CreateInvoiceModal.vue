@@ -1,21 +1,26 @@
 <template>
-  <div v-if="visible" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
-      <div class="mt-3">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-medium text-gray-900">Create Invoice</h3>
-          <button @click="onClose" class="text-gray-400 hover:text-gray-600">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+  <div
+    v-if="visible"
+    class="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4"
+  >
+    <div class="w-full max-w-6xl max-h-[90vh] bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+      <!-- Modal Header - Fixed -->
+      <div class="flex justify-between items-center p-6 border-b border-gray-200 bg-white">
+        <h3 class="text-lg font-medium text-gray-900">Create Invoice</h3>
+        <button @click="onClose" class="text-gray-400 hover:text-gray-600" aria-label="Close modal">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
 
+      <!-- Modal Content - Scrollable -->
+      <div class="flex-1 overflow-y-auto p-6">
         <form @submit.prevent="submit" class="space-y-4">
           <!-- Customer Info (Read-only) -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -51,38 +56,67 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">Payment Condition *</label>
               <select
                 v-model="localForm.paymentCondition"
+                @blur="validateField('paymentCondition')"
+                @change="clearFieldError('paymentCondition')"
                 required
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                :class="[
+                  'w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
+                  fieldErrors.paymentCondition ? 'border-red-500' : 'border-gray-300'
+                ]"
               >
+                <option value="">Select payment condition</option>
                 <option value="cash">Cash</option>
                 <option value="net15">Net 15 days</option>
                 <option value="net30">Net 30 days</option>
                 <option value="net45">Net 45 days</option>
                 <option value="net60">Net 60 days</option>
               </select>
+              <p v-if="fieldErrors.paymentCondition" class="mt-1 text-sm text-red-600">{{ fieldErrors.paymentCondition }}</p>
+              <p v-if="localForm.paymentCondition && !fieldErrors.paymentCondition" class="mt-1 text-xs text-gray-500">
+                Payment condition validated on server
+              </p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Currency *</label>
               <select
                 v-model="localForm.currency"
+                @blur="validateField('currency')"
+                @change="clearFieldError('currency')"
                 required
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                :class="[
+                  'w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
+                  fieldErrors.currency ? 'border-red-500' : 'border-gray-300'
+                ]"
               >
+                <option value="">Select currency</option>
                 <option value="VND">VND</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
               </select>
+              <p v-if="fieldErrors.currency" class="mt-1 text-sm text-red-600">{{ fieldErrors.currency }}</p>
+              <p v-if="localForm.currency && !fieldErrors.currency" class="mt-1 text-xs text-gray-500">
+                Currency validated on server
+              </p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">VAT Rate (%)</label>
               <input
                 v-model.number="localForm.vatRate"
+                @blur="validateField('vatRate')"
+                @input="clearFieldError('vatRate')"
                 type="number"
                 min="0"
                 max="100"
                 step="0.1"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                :class="[
+                  'w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
+                  fieldErrors.vatRate ? 'border-red-500' : 'border-gray-300'
+                ]"
               />
+              <p v-if="fieldErrors.vatRate" class="mt-1 text-sm text-red-600">{{ fieldErrors.vatRate }}</p>
+              <p v-if="localForm.vatRate && !fieldErrors.vatRate" class="mt-1 text-xs text-gray-500">
+                VAT rate must be between 0-100% (validated on server)
+              </p>
             </div>
           </div>
 
@@ -98,9 +132,7 @@
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Unit Price
-                    </th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Price</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
                   </tr>
                 </thead>
@@ -110,17 +142,10 @@
                     :key="detail._id || detail.productId"
                   >
                     <td class="px-3 py-2 text-sm text-gray-900">{{ idx + 1 }}</td>
-                    <td class="px-3 py-2 text-sm text-gray-900">
-                      {{ getProductName(detail) }}
-                    </td>
+                    <td class="px-3 py-2 text-sm text-gray-900">{{ getProductName(detail) }}</td>
                     <td class="px-3 py-2 text-sm text-gray-500">{{ detail.quantity }}</td>
-                    <td class="px-3 py-2 text-sm text-gray-500">
-                      {{ formatCurrency(convertPrice(getProductPrice(detail))) }} {{ localForm.currency }}
-                    </td>
-                    <td class="px-3 py-2 text-sm text-gray-900">
-                      {{ formatCurrency(convertPrice(getProductPrice(detail) * detail.quantity)) }}
-                      {{ localForm.currency }}
-                    </td>
+                    <td class="px-3 py-2 text-sm text-gray-500">{{ formatCurrency(convertPrice(getProductPrice(detail))) }} {{ localForm.currency }}</td>
+                    <td class="px-3 py-2 text-sm text-gray-900">{{ formatCurrency(convertPrice(getProductPrice(detail) * detail.quantity)) }} {{ localForm.currency }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -131,21 +156,15 @@
               <div class="w-64 space-y-2 text-sm">
                 <div class="flex justify-between">
                   <span>Subtotal:</span>
-                  <span class="font-medium"
-                    >{{ formatCurrency(convertPrice(subtotalUSD)) }} {{ localForm.currency }}</span
-                  >
+                  <span class="font-medium">{{ formatCurrency(convertPrice(subtotalUSD)) }} {{ localForm.currency }}</span>
                 </div>
                 <div class="flex justify-between">
                   <span>VAT ({{ localForm.vatRate }}%):</span>
-                  <span class="font-medium"
-                    >{{ formatCurrency(convertPrice(vatAmountUSD)) }} {{ localForm.currency }}</span
-                  >
+                  <span class="font-medium">{{ formatCurrency(convertPrice(vatAmountUSD)) }} {{ localForm.currency }}</span>
                 </div>
                 <div class="flex justify-between font-medium border-t pt-2">
                   <span>Total:</span>
-                  <span class="font-semibold"
-                    >{{ formatCurrency(convertPrice(totalUSD)) }} {{ localForm.currency }}</span
-                  >
+                  <span class="font-semibold">{{ formatCurrency(convertPrice(totalUSD)) }} {{ localForm.currency }}</span>
                 </div>
               </div>
             </div>
@@ -176,7 +195,8 @@
               :disabled="isSubmitting"
               class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
-              {{ isSubmitting ? 'Creating...' : 'Create Invoice' }}
+              <span v-if="isSubmitting">Creating...</span>
+              <span v-else>Create Invoice</span>
             </button>
           </div>
         </form>
@@ -186,44 +206,63 @@
 </template>
 
 <script setup>
-import { reactive, watch, computed } from 'vue';
+/*
+  CreateInvoiceModal.vue
+  - Now performs invoice creation (POST /api/invoices) internally
+  - Uses Vue Toastification to show success/error toasts inside the modal
+  - Emits 'created' with new invoice data on success, 'close' when closed
+  Note: ensure you registered Toastification plugin in your app (main.js)
+    import Toast from 'vue-toastification'
+    import 'vue-toastification/dist/index.css'
+    app.use(Toast, { position: 'top-right' })
+*/
+
+import { reactive, watch, computed, ref, onMounted, onUnmounted } from 'vue';
+import axios from 'axios';
+import { useToast } from 'vue-toastification';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   selectedExport: { type: Object, default: null },
-  isSubmitting: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['submit', 'close', 'error']);
+const emit = defineEmits(['created', 'close', 'error']);
 
-// Exchange rates (USD as base currency)
+const toast = useToast();
+
+// Scroll management
+const scrollY = ref(0); // Store scroll position for body scroll prevention
+
+// Exchange rates (USD as base currency) - consider moving to a shared store or API for real app
 const exchangeRates = {
   USD: 1,
-  VND: 26363, // 1 USD ≈ 26,363 VND
-  EUR: 0.86, // 1 USD ≈ 0.86 EUR
+  VND: 26363,
+  EUR: 0.86,
 };
 
 const defaultForm = () => ({
   paymentCondition: 'net30',
-  currency: 'USD', // Default to USD since prices are stored in USD
+  currency: 'USD',
   vatRate: 10,
   note: '',
 });
 
 const localForm = reactive(defaultForm());
+const isSubmitting = ref(false);
+const fieldErrors = reactive({});
 
-// Computed properties for price calculations
+// Computed: subtotal / vat / total in USD (assuming stored prices are in USD)
 const subtotalUSD = computed(() => {
   if (!props.selectedExport?.details) return 0;
   return props.selectedExport.details.reduce((sum, detail) => {
-    const price = getProductPrice(detail);
-    const quantity = detail.quantity || 0;
-    return sum + (price * quantity);
+    const price = Number(getProductPrice(detail) || 0);
+    const quantity = Number(detail.quantity || 0);
+    return sum + price * quantity;
   }, 0);
 });
 
 const vatAmountUSD = computed(() => {
-  return subtotalUSD.value * (localForm.vatRate / 100);
+  return subtotalUSD.value * (Number(localForm.vatRate || 0) / 100);
 });
 
 const totalUSD = computed(() => {
@@ -232,84 +271,203 @@ const totalUSD = computed(() => {
 
 // Helper functions
 function getProductName(detail) {
-  return detail.productName || detail.productId?.name || detail.productId || 'Unknown Product';
+  return detail.productName || (detail.productId && detail.productId.name) || detail.productId || 'Unknown Product';
 }
 
 function getProductPrice(detail) {
-  // Check if price is in the detail object directly
-  if (detail.unitPrice) {
-    return detail.unitPrice;
+  // Prefer explicit unitPrice on detail
+  if (detail.unitPrice != null) return Number(detail.unitPrice);
+
+  // If product is populated object
+  if (detail.productId && typeof detail.productId === 'object') {
+    return Number(detail.productId.finalPrice ?? detail.productId.basePrice ?? detail.productId.price ?? 0);
   }
 
-  // Check if price is in the product object
-  if (detail.productId) {
-    if (typeof detail.productId === 'object') {
-      // If productId is populated, try to get price from it
-      return detail.productId.finalPrice ?? detail.productId.basePrice ?? detail.productId.price ?? 0;
-    } else {
-      // If productId is just an ID, try to find product in products list
-      const product = props.selectedExport?.details?.find((d) => d.productId === detail.productId)?.productId;
-      if (product) {
-        return product.finalPrice ?? product.basePrice ?? product.price ?? 0;
-      }
-    }
-  }
-
+  // Fallback
   return 0;
 }
 
 function convertPrice(usdAmount) {
-  const rate = exchangeRates[localForm.currency] || 1;
-  return usdAmount * rate;
+  const rate = Number(exchangeRates[localForm.currency] ?? 1);
+  const converted = Number(usdAmount || 0) * rate;
+  // round to 2 decimals
+  return Math.round((converted + Number.EPSILON) * 100) / 100;
 }
 
 function formatCurrency(amount) {
-  const n = Number(amount || 0);
-  return new Intl.NumberFormat('vi-VN').format(n);
+  const value = Number(amount || 0);
+  try {
+    // Use currency-aware formatter
+    return new Intl.NumberFormat(undefined, { style: 'decimal', maximumFractionDigits: 2 }).format(value);
+  } catch (e) {
+    return value.toLocaleString();
+  }
 }
 
+// reset form when closing and handle body scroll
 watch(
   () => props.visible,
   (v) => {
-    if (!v) {
-      // reset when modal closes
+    if (v) {
+      // Prevent body scroll when modal opens
+      preventBodyScroll();
+    } else {
+      // Allow body scroll when modal closes
+      allowBodyScroll();
       Object.assign(localForm, defaultForm());
+      isSubmitting.value = false;
+      Object.keys(fieldErrors).forEach(key => delete fieldErrors[key]);
     }
   },
 );
 
+// Frontend validation methods
+function validateField(fieldName) {
+  clearFieldError(fieldName);
+
+  switch (fieldName) {
+    case 'paymentCondition':
+      if (!localForm.paymentCondition) {
+        fieldErrors.paymentCondition = 'Payment condition is required';
+      } else if (!['cash', 'net15', 'net30', 'net45', 'net60'].includes(localForm.paymentCondition)) {
+        fieldErrors.paymentCondition = 'Invalid payment condition';
+      }
+      break;
+
+    case 'currency':
+      if (!localForm.currency) {
+        fieldErrors.currency = 'Currency is required';
+      } else if (!['VND', 'USD', 'EUR'].includes(localForm.currency)) {
+        fieldErrors.currency = 'Invalid currency';
+      }
+      break;
+
+    case 'vatRate':
+      if (isNaN(localForm.vatRate)) {
+        fieldErrors.vatRate = 'VAT rate must be a valid number';
+      } else if (localForm.vatRate < 0) {
+        fieldErrors.vatRate = 'VAT rate must be ≥ 0';
+      } else if (localForm.vatRate > 100) {
+        fieldErrors.vatRate = 'VAT rate must be ≤ 100';
+      }
+      break;
+  }
+}
+
+function clearFieldError(fieldName) {
+  if (fieldErrors[fieldName]) {
+    delete fieldErrors[fieldName];
+  }
+}
+
 function validate() {
-  if (!localForm.paymentCondition) {
-    emit('error', 'Payment condition is required');
+  // Clear previous errors
+  Object.keys(fieldErrors).forEach(key => delete fieldErrors[key]);
+
+  // Validate all fields
+  validateField('paymentCondition');
+  validateField('currency');
+  validateField('vatRate');
+
+  // Check if any field has errors
+  const hasFieldErrors = Object.keys(fieldErrors).length > 0;
+
+  if (hasFieldErrors) {
+    toast.error('Please fix the highlighted fields above');
+    emit('error', 'Please fix the highlighted fields above');
     return false;
   }
-  if (!localForm.currency) {
-    emit('error', 'Currency is required');
-    return false;
-  }
-  if (localForm.vatRate < 0 || localForm.vatRate > 100 || isNaN(localForm.vatRate)) {
-    emit('error', 'VAT rate must be between 0 and 100');
-    return false;
-  }
+
   if (!props.selectedExport || !props.selectedExport._id) {
+    toast.error('No export receipt selected');
     emit('error', 'No export receipt selected');
     return false;
   }
+
   return true;
 }
 
-function submit() {
+async function submit() {
   if (!validate()) return;
+
   const payload = {
+    exportReceiptId: props.selectedExport._id,
     paymentCondition: localForm.paymentCondition,
     currency: localForm.currency,
     vatRate: Number(localForm.vatRate),
     note: localForm.note,
+    // Optionally include line items if backend expects them
+    items: (props.selectedExport.details || []).map((d) => ({
+      productId: d.productId && typeof d.productId === 'object' ? d.productId._id ?? d.productId.id : d.productId,
+      productName: getProductName(d),
+      unitPrice: getProductPrice(d),
+      quantity: d.quantity || 0,
+    })),
+    subtotal: subtotalUSD.value,
+    vatAmount: vatAmountUSD.value,
+    total: totalUSD.value,
   };
-  emit('submit', payload);
+
+  isSubmitting.value = true;
+  try {
+    const res = await axios.post('/api/invoices/from-export', payload);
+    // Assume API returns created invoice in res.data
+    toast.success('Invoice created successfully');
+    emit('created', res.data);
+    // auto-close modal after short delay to let user see toast
+    setTimeout(() => {
+      emit('close');
+    }, 400);
+  } catch (err) {
+    const msg = err?.response?.data?.message || err.message || 'Failed to create invoice';
+    toast.error(msg);
+    emit('error', msg);
+  } finally {
+    isSubmitting.value = false;
+  }
 }
+
+// Methods to handle body scroll
+const preventBodyScroll = () => {
+  // Store current scroll position
+  scrollY.value = window.scrollY;
+  // Apply styles to prevent scrolling
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${scrollY.value}px`;
+  document.body.style.width = '100%';
+  document.body.style.overflow = 'hidden';
+};
+
+const allowBodyScroll = () => {
+  // Remove fixed positioning
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.width = '';
+  document.body.style.overflow = '';
+  // Restore scroll position
+  if (scrollY.value !== undefined) {
+    window.scrollTo(0, scrollY.value);
+  }
+};
+
+// Lifecycle hooks
+onMounted(() => {
+  // Prevent body scroll if modal is already visible
+  if (props.visible) {
+    preventBodyScroll();
+  }
+});
+
+onUnmounted(() => {
+  // Ensure body scroll is restored when component is destroyed
+  allowBodyScroll();
+});
 
 function onClose() {
   emit('close');
 }
 </script>
+
+<style scoped>
+/* small scoped tweaks if needed */
+</style>

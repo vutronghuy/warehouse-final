@@ -111,12 +111,6 @@
           />
         </svg>
         Users
-        <span
-          v-if="userCount > 0"
-          class="ml-auto bg-[#6A4C93] text-white text-xs font-medium px-2.5 py-1 rounded-full shadow-sm"
-        >
-          {{ userCount }}
-        </span>
       </router-link>
 
       <!-- Export Review -->
@@ -165,6 +159,7 @@
 
 <script>
 import axios from 'axios';
+import socketService from '@/services/socketService';
 
 export default {
   name: 'ManagerSidebar',
@@ -172,8 +167,8 @@ export default {
     return {
       userInfo: null,
       warehouseInfo: null,
-      userCount: 0,
       pendingExports: 0,
+      loadStatsTimeout: null, // Debounce timeout
     };
   },
   computed: {
@@ -210,6 +205,29 @@ export default {
     this.loadUserInfo();
     this.loadWarehouseInfo();
     this.loadStats();
+    // Initialize Socket.IO connection
+    this.initializeSocket();
+  },
+  beforeUnmount() {
+    // Clear timeout
+    if (this.loadStatsTimeout) {
+      clearTimeout(this.loadStatsTimeout);
+    }
+    // Remove event listeners
+    if (this.handleExportCreated) {
+      window.removeEventListener('export-created', this.handleExportCreated);
+    }
+    if (this.handleExportStatusChanged) {
+      window.removeEventListener('export-status-changed', this.handleExportStatusChanged);
+    }
+    if (this.handleExportApproved) {
+      window.removeEventListener('export-approved', this.handleExportApproved);
+    }
+    if (this.handleExportRejected) {
+      window.removeEventListener('export-rejected', this.handleExportRejected);
+    }
+    // Disconnect Socket.IO
+    socketService.disconnect();
   },
   methods: {
     async loadUserInfo() {
@@ -278,13 +296,10 @@ export default {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         if (!token) return;
 
-        // Load user count
-        const usersResponse = await axios.get('/api/users', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (usersResponse.data.users) {
-          this.userCount = usersResponse.data.users.length;
-        }
+        // Load user count (if needed in future)
+        // const usersResponse = await axios.get('/api/users', {
+        //   headers: { Authorization: `Bearer ${token}` },
+        // });
 
         // Load pending exports count
         const exportsResponse = await axios.get('/api/export-receipts', {
@@ -292,11 +307,86 @@ export default {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (exportsResponse.data.exportReceipts) {
-          this.pendingExports = exportsResponse.data.exportReceipts.length;
+          const newCount = exportsResponse.data.exportReceipts.length;
+          // Chỉ log khi count thực sự thay đổi
+          if (this.pendingExports !== newCount) {
+            console.log('📊 ManagerSidebar - Updating pendingExports count:', this.pendingExports, '->', newCount);
+            this.pendingExports = newCount;
+          }
         }
       } catch (error) {
         console.error('Error loading stats:', error);
       }
+    },
+
+    // Debounced version of loadStats
+    debouncedLoadStats() {
+      if (this.loadStatsTimeout) {
+        clearTimeout(this.loadStatsTimeout);
+      }
+      this.loadStatsTimeout = setTimeout(() => {
+        this.loadStats();
+      }, 500); // 500ms debounce
+    },
+
+    initializeSocket() {
+      console.log('🚀 Initializing Socket.IO for ManagerSidebar...');
+      // Connect to Socket.IO
+      const socket = socketService.connect();
+
+      // Join manager room
+      if (socket) {
+        console.log('🏠 Joining manager room...');
+        socket.emit('join-room', 'managers');
+        console.log('✅ ManagerSidebar socket connected and joined managers room');
+      } else {
+        console.warn('⚠️ Socket not available, pending exports count will not update in real-time');
+      }
+
+      // Listen for custom events from socket service
+      this.handleExportCreated = (event) => {
+        const data = event.detail;
+        console.log('📦 ManagerSidebar - Export created:', data);
+        // Update count immediately
+        const oldCount = this.pendingExports;
+        this.pendingExports += 1;
+        console.log('📊 ManagerSidebar - Updated pendingExports count:', oldCount, '->', this.pendingExports);
+        // Also refresh from API to ensure accuracy
+        this.debouncedLoadStats();
+      };
+
+      this.handleExportStatusChanged = (event) => {
+        const data = event.detail;
+        console.log('📦 ManagerSidebar - Export status changed:', data);
+        // Update count immediately (decrease because export is no longer pending)
+        if (this.pendingExports > 0) {
+          const oldCount = this.pendingExports;
+          this.pendingExports -= 1;
+          console.log('📊 ManagerSidebar - Updated pendingExports count:', oldCount, '->', this.pendingExports);
+        }
+        // Also refresh from API to ensure accuracy
+        this.debouncedLoadStats();
+      };
+
+      this.handleExportApproved = (event) => {
+        const data = event.detail;
+        console.log('✅ ManagerSidebar - Export approved:', data);
+        // Refresh pending exports count
+        this.debouncedLoadStats();
+      };
+
+      this.handleExportRejected = (event) => {
+        const data = event.detail;
+        console.log('❌ ManagerSidebar - Export rejected:', data);
+        // Refresh pending exports count
+        this.debouncedLoadStats();
+      };
+
+      // Add event listeners
+      window.addEventListener('export-created', this.handleExportCreated);
+      window.addEventListener('export-status-changed', this.handleExportStatusChanged);
+      window.addEventListener('export-approved', this.handleExportApproved);
+      window.addEventListener('export-rejected', this.handleExportRejected);
     },
   },
   watch: {
