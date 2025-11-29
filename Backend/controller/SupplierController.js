@@ -232,7 +232,83 @@ exports.updateSupplier = async (req, res, next) => {
 };
 
 // Delete supplier (hard delete)
+// Soft delete supplier
 exports.deleteSupplier = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { hardDelete } = req.query; // Optional: hardDelete=true for permanent deletion (super admin only)
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid supplier ID format'
+      });
+    }
+
+    // Find supplier first to check if it exists (include deleted ones for hard delete check)
+    const supplier = await Supplier.findOne({ _id: id });
+    if (!supplier) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supplier not found'
+      });
+    }
+
+    // Check if already soft deleted
+    if (supplier.deletedAt && !hardDelete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Supplier is already deleted'
+      });
+    }
+
+    let deletedSupplier;
+    let message;
+
+    if (hardDelete === 'true' && req.user?.isSuperAdmin) {
+      // Hard delete - only for super admin
+      deletedSupplier = await Supplier.findByIdAndDelete(id);
+      message = 'Supplier permanently deleted from database';
+      console.log(`✅ Supplier permanently deleted: ${deletedSupplier.name} (ID: ${deletedSupplier._id})`);
+    } else {
+      // Soft delete - set deletedAt timestamp
+      deletedSupplier = await Supplier.findByIdAndUpdate(
+        id,
+        { 
+          deletedAt: new Date(),
+          updatedBy: req.user?.sub || req.user?.id
+        },
+        { new: true }
+      );
+      message = 'Supplier deleted successfully (soft delete)';
+      console.log(`✅ Supplier soft deleted: ${deletedSupplier.name} (ID: ${deletedSupplier._id})`);
+    }
+
+    if (!deletedSupplier) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supplier not found or already deleted'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: message,
+      deletedSupplier: {
+        id: deletedSupplier._id,
+        name: deletedSupplier.name,
+        code: deletedSupplier.code,
+        deletedAt: deletedSupplier.deletedAt || null
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting supplier:', error);
+    next(error);
+  }
+};
+
+// Restore soft-deleted supplier
+exports.restoreSupplier = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -243,37 +319,38 @@ exports.deleteSupplier = async (req, res, next) => {
       });
     }
 
-    // Find supplier first to check if it exists
-    const supplier = await Supplier.findById(id);
+    // Find supplier including deleted ones
+    const supplier = await Supplier.findOne({ _id: id, deletedAt: { $ne: null } });
     if (!supplier) {
       return res.status(404).json({
         success: false,
-        message: 'Supplier not found'
+        message: 'Deleted supplier not found'
       });
     }
 
-    // Hard delete - permanently remove from database
-    const deletedSupplier = await Supplier.findByIdAndDelete(id);
+    // Restore by setting deletedAt to null
+    const restoredSupplier = await Supplier.findByIdAndUpdate(
+      id,
+      { 
+        deletedAt: null,
+        updatedBy: req.user?.sub || req.user?.id
+      },
+      { new: true }
+    );
 
-    if (!deletedSupplier) {
-      return res.status(404).json({
-        success: false,
-        message: 'Supplier not found or already deleted'
-      });
-    }
-
-    console.log(`✅ Supplier permanently deleted: ${deletedSupplier.name} (ID: ${deletedSupplier._id})`);
+    console.log(`✅ Supplier restored: ${restoredSupplier.name} (ID: ${restoredSupplier._id})`);
 
     res.json({
       success: true,
-      message: 'Supplier permanently deleted from database',
-      deletedSupplier: {
-        id: deletedSupplier._id,
-        name: deletedSupplier.name
+      message: 'Supplier restored successfully',
+      supplier: {
+        id: restoredSupplier._id,
+        name: restoredSupplier.name,
+        code: restoredSupplier.code
       }
     });
   } catch (error) {
-    console.error('Error deleting supplier:', error);
+    console.error('Error restoring supplier:', error);
     next(error);
   }
 };

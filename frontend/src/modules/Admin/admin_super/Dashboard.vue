@@ -20,7 +20,7 @@
               <div>
                 <h3 class="text-lg font-medium text-gray-900">Inventory Levels by Warehouse</h3>
                 <p class="text-xs text-gray-500 mt-1">
-                  Số lượng tồn (hoặc giá trị tồn kho) theo từng kho
+                  Inventory quantity (or inventory value) by warehouse
                 </p>
               </div>
             </div>
@@ -35,21 +35,21 @@
               <div>
                 <h3 class="text-lg font-medium text-gray-900">Inbound vs Outbound Trends</h3>
                 <p class="text-xs text-gray-500 mt-1">
-                  Xu hướng nhập - xuất theo thời gian (doanh thu vs chi phí)
+                  Import-export trends over time (revenue and expenses)
                 </p>
               </div>
             </div>
             <div class="flex items-center gap-3 mb-4 text-xs">
               <label class="flex items-center gap-2">
-                <span class="text-gray-600">Kỳ</span>
+                <span class="text-gray-600">Period</span>
                 <select v-model="cashFlowFilter.period" class="border border-gray-300 rounded px-2 py-1 text-xs">
                   <option value="year">Yearly</option>
                   <option value="month">Monthly</option>
-                  <option value="day">Daily (trong tháng)</option>
+                  <option value="day">Daily (in month)</option>
                 </select>
               </label>
               <label class="flex items-center gap-2" v-if="cashFlowFilter.period !== 'day'">
-                <span class="text-gray-600">Năm</span>
+                <span class="text-gray-600">Year</span>
                 <input
                   v-model.number="cashFlowFilter.year"
                   type="number"
@@ -57,7 +57,7 @@
                 />
               </label>
               <label class="flex items-center gap-2" v-else>
-                <span class="text-gray-600">Tháng/Năm</span>
+                <span class="text-gray-600">Month/Year</span>
                 <input
                   v-model.number="cashFlowFilter.year"
                   type="number"
@@ -76,7 +76,7 @@
                 class="ml-auto inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-gray-900 text-white hover:bg-gray-800"
                 @click="reloadCashFlow"
               >
-                Áp dụng
+              Apply
               </button>
             </div>
             <div class="flex-1">
@@ -93,11 +93,11 @@
               <div>
                 <h3 class="text-lg font-medium text-gray-900">Revenue by Warehouse</h3>
                 <p class="text-xs text-gray-500 mt-1">
-                  Doanh thu theo từng kho, có lọc kho và khoảng thời gian
+                  Revenue by warehouse, with warehouse and time period filters
                 </p>
               </div>
               <div class="text-right">
-                <p class="text-xs text-gray-500">Tổng doanh thu</p>
+                <p class="text-xs text-gray-500">Total Revenue</p>
                 <p class="text-xl font-semibold text-emerald-600">
                   {{ formatCurrency(totalRevenueByWarehouse) }}
                 </p>
@@ -106,12 +106,12 @@
 
             <div class="flex flex-wrap items-center gap-3 mb-4 text-xs">
               <label class="flex items-center gap-2">
-                <span class="text-gray-600">Kho</span>
+                <span class="text-gray-600">Warehouse</span>
                 <select
                   v-model="selectedWarehouseForRevenue"
                   class="border border-gray-300 rounded px-2 py-1 text-xs min-w-[140px]"
                 >
-                  <option value="">Tất cả kho</option>
+                  <option value="">All Warehouses</option>
                   <option
                     v-for="w in warehouses"
                     :key="w._id"
@@ -123,11 +123,11 @@
               </label>
 
               <label class="flex items-center gap-2">
-                <span class="text-gray-600">Kỳ</span>
+                <span class="text-gray-600">Period</span>
                 <select v-model="revenueFilter.period" class="border border-gray-300 rounded px-2 py-1 text-xs">
-                  <option value="all">Tất cả</option>
-                  <option value="year">Năm</option>
-                  <option value="month">Tháng</option>
+                  <option value="all">All</option>
+                  <option value="year">Year</option>
+                  <option value="month">Month</option>
                 </select>
               </label>
 
@@ -135,7 +135,7 @@
                 v-if="revenueFilter.period === 'year'"
                 class="flex items-center gap-2"
               >
-                <span class="text-gray-600">Năm</span>
+                <span class="text-gray-600">Year</span>
                 <input
                   v-model.number="revenueFilter.year"
                   type="number"
@@ -147,7 +147,7 @@
                 v-if="revenueFilter.period === 'month'"
                 class="flex items-center gap-2"
               >
-                <span class="text-gray-600">Tháng/Năm</span>
+                <span class="text-gray-600">Month/Year</span>
                 <input
                   v-model.number="revenueFilter.year"
                   type="number"
@@ -167,7 +167,7 @@
                 class="ml-auto inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-gray-900 text-white hover:bg-gray-800"
                 @click="reloadRevenueByWarehouse"
               >
-                Áp dụng
+                Apply
               </button>
             </div>
 

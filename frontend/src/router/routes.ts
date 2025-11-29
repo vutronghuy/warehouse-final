@@ -104,6 +104,48 @@ const routes: RouteRecordRaw[] = [
     beforeEnter: requireSuperAdmin,
   },
   {
+    path: '/Superadmin/inventory',
+    name: 'SuperAdminInventory',
+    component: () => {
+      console.log('📦 Loading InventoryTable component...');
+      try {
+        return import('@/modules/Admin/admin_super/Inventory/InventoryTable.vue').then(module => {
+          console.log('✅ InventoryTable component loaded successfully');
+          return module;
+        }).catch(error => {
+          console.error('❌ Error loading InventoryTable component:', error);
+          throw error;
+        });
+      } catch (error) {
+        console.error('❌ Error in InventoryTable import:', error);
+        throw error;
+      }
+    },
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireSuperAdmin,
+  },
+  {
+    path: '/Superadmin/inventory/transactions',
+    name: 'SuperAdminInventoryTransactions',
+    component: () => {
+      console.log('📦 Loading InventoryTransactionTable component...');
+      try {
+        return import('@/modules/Admin/admin_super/Inventory/InventoryTransactionTable.vue').then(module => {
+          console.log('✅ InventoryTransactionTable component loaded successfully');
+          return module;
+        }).catch(error => {
+          console.error('❌ Error loading InventoryTransactionTable component:', error);
+          throw error;
+        });
+      } catch (error) {
+        console.error('❌ Error in InventoryTransactionTable import:', error);
+        throw error;
+      }
+    },
+    meta: { layout: 'defaultNoHeader' },
+    beforeEnter: requireSuperAdmin,
+  },
+  {
     path: '/admin',
     name: RouteName.ADMIN,
     component: Admin,

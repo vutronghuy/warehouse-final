@@ -260,7 +260,17 @@ class SocketService {
   on(event, callback) {
     if (this.socket) {
       console.log('🎧 Setting up event listener for:', event);
-      this.socket.on(event, callback);
+      // Wrap callback to handle errors and undefined data
+      this.socket.on(event, (data) => {
+        try {
+          // Ensure callback receives data (even if undefined)
+          if (callback) {
+            callback(data);
+          }
+        } catch (error) {
+          console.error(`Error in event handler for ${event}:`, error);
+        }
+      });
     } else {
       console.warn('⚠️ Cannot set up event listener - socket not connected');
     }

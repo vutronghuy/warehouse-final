@@ -185,7 +185,10 @@
                         <div
                           v-if="openMenuUserId === user._id"
                           @click.stop
-                          class="absolute right-6 top-10 z-50 w-48 bg-white border border-gray-200 rounded-md shadow-lg py-1"
+                          :class="[
+                            'absolute right-6 z-50 w-48 bg-white border border-gray-200 rounded-md shadow-lg py-1',
+                            idx >= paginatedUsers.length - 2 ? 'bottom-10' : 'top-10'
+                          ]"
                         >
                           <button
                             @click="handleMenuChangeRole(user)"

@@ -14,7 +14,12 @@
           </div>
           <button @click="emitClose" class="text-gray-400 hover:text-gray-600">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -40,7 +45,10 @@
 
             <div>
               <label class="block text-sm font-medium text-gray-700">Outcome</label>
-              <span :class="getOutcomeClass(log.outcome)" class="inline-block px-2 py-1 text-xs font-semibold rounded-full">
+              <span
+                :class="getOutcomeClass(log.outcome)"
+                class="inline-block px-2 py-1 text-xs font-semibold rounded-full"
+              >
                 {{ log.outcome }}
               </span>
             </div>
@@ -89,14 +97,16 @@
                     <div v-else-if="log.before[key] !== afterValue" class="text-yellow-600">
                       <span class="font-medium">~ {{ getFieldLabel(key) }}:</span>
                       <span class="ml-2">
-                        <span class="text-red-500 line-through">{{ formatFieldValue(key, log.before[key]) }}</span>
+                        <span class="text-red-500 line-through">{{
+                          formatFieldValue(key, log.before[key])
+                        }}</span>
                         <span class="mx-1">→</span>
                         <span class="text-green-600">{{ formatFieldValue(key, afterValue) }}</span>
                       </span>
                     </div>
                   </div>
 
-                  <div v-for="(beforeValue, key) in log.before" :key="`removed-${key}`" v-if="!log.after[key]" class="text-sm">
+                  <div v-for="(beforeValue, key) in removedFields" :key="`removed-${key}`" class="text-sm">
                     <span class="font-medium text-red-600">- {{ getFieldLabel(key) }}:</span>
                     <span class="ml-2 line-through">{{ formatFieldValue(key, beforeValue) }}</span>
                   </div>
@@ -116,17 +126,17 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, watch, ref, onUnmounted } from 'vue';
+import { defineProps, defineEmits, watch, ref, onUnmounted, computed } from 'vue';
 
 const props = defineProps({
   log: {
     type: Object,
-    default: null
+    default: null,
   },
   open: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 });
 
 const emit = defineEmits(['close']);
@@ -160,11 +170,24 @@ watch(
     } else {
       allowBodyScroll();
     }
-  }
+  },
 );
 
 onUnmounted(() => {
   allowBodyScroll();
+});
+
+const removedFields = computed(() => {
+  if (!props.log?.before || !props.log?.after) {
+    return {};
+  }
+  const removed = {};
+  for (const key in props.log.before) {
+    if (!props.log.after[key]) {
+      removed[key] = props.log.before[key];
+    }
+  }
+  return removed;
 });
 
 const formatDate = (dateString) => {
@@ -187,37 +210,37 @@ const formatAction = (action) => {
     DELETE_EXPORT_SLIP: 'Delete Export Slip',
     CREATE_INVOICE: 'Create Invoice',
     UPDATE_INVOICE: 'Update Invoice',
-    DELETE_INVOICE: 'Delete Invoice'
+    DELETE_INVOICE: 'Delete Invoice',
   };
   return actionMap[action] || action;
 };
 
 const getFieldLabel = (fieldName) => {
   const fieldLabels = {
-    customerName: 'Khách hàng',
-    customerPhone: 'Số điện thoại',
-    customerAddress: 'Địa chỉ',
-    totalAmount: 'Tổng tiền',
-    finalAmount: 'Thành tiền sau giảm',
-    vatAmount: 'Tiền VAT',
-    vatRate: 'Tỷ lệ VAT',
-    status: 'Trạng thái',
-    paymentCondition: 'Điều kiện thanh toán',
-    currency: 'Tiền tệ',
-    invoiceNumber: 'Số hóa đơn',
-    receiptNumber: 'Số phiếu',
-    fileName: 'Tên file',
-    productCount: 'Số sản phẩm',
-    successCount: 'Số thành công',
-    errorCount: 'Số lỗi',
-    itemCount: 'Số mục',
-    notes: 'Ghi chú',
-    note: 'Ghi chú',
-    reason: 'Lý do',
-    createdAt: 'Ngày tạo',
-    updatedAt: 'Ngày cập nhật',
-    issueDate: 'Ngày phát hành',
-    dueDate: 'Ngày đến hạn'
+    customerName: 'Customer',
+    customerPhone: 'Phone Number',
+    customerAddress: 'Address',
+    totalAmount: 'Total Amount',
+    finalAmount: 'Amount after Discount',
+    vatAmount: 'VAT Amount',
+    vatRate: 'VAT Rate',
+    status: 'Status',
+    paymentCondition: 'Payment Condition',
+    currency: 'Currency',
+    invoiceNumber: 'Invoice Number',
+    receiptNumber: 'Voucher Number',
+    fileName: 'File Name',
+    productCount: 'Product Number',
+    successCount: 'Success Number',
+    errorCount: 'Error Number',
+    itemCount: 'Item Number',
+    notes: 'Note',
+    note: 'Note',
+    reason: 'Reason',
+    createdAt: 'Creation Date',
+    updatedAt: 'Update Date',
+    issueDate: 'Issued Date',
+    dueDate: 'Due Date',
   };
   return fieldLabels[fieldName] || fieldName;
 };
@@ -227,7 +250,7 @@ const formatCurrency = (amount, currency = 'VND') => {
   try {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
-      currency
+      currency,
     }).format(num);
   } catch (e) {
     return `${new Intl.NumberFormat('vi-VN').format(num)} ${currency}`;
@@ -237,7 +260,9 @@ const formatCurrency = (amount, currency = 'VND') => {
 const formatFieldValue = (fieldName, value) => {
   if (value === null || value === undefined) return 'N/A';
 
-  if (['totalAmount', 'finalAmount', 'vatAmount', 'basePrice', 'unitPrice', 'lineTotal'].includes(fieldName)) {
+  if (
+    ['totalAmount', 'finalAmount', 'vatAmount', 'basePrice', 'unitPrice', 'lineTotal'].includes(fieldName)
+  ) {
     return formatCurrency(value);
   }
 
@@ -259,7 +284,7 @@ const formatFieldValue = (fieldName, value) => {
       draft: 'Bản nháp',
       reviewed: 'Đã xem xét',
       'in stock': 'Còn hàng',
-      'out of stock': 'Hết hàng'
+      'out of stock': 'Hết hàng',
     };
     return statusMap[value] || value;
   }
@@ -270,7 +295,7 @@ const formatFieldValue = (fieldName, value) => {
       net15: '15 ngày',
       net30: '30 ngày',
       net45: '45 ngày',
-      net60: '60 ngày'
+      net60: '60 ngày',
     };
     return paymentMap[value] || value;
   }
@@ -279,7 +304,7 @@ const formatFieldValue = (fieldName, value) => {
     const currencyMap = {
       VND: 'Việt Nam Đồng',
       USD: 'Đô la Mỹ',
-      EUR: 'Euro'
+      EUR: 'Euro',
     };
     return currencyMap[value] || value;
   }
@@ -311,4 +336,3 @@ const getOutcomeClass = (outcome) => {
   }
 };
 </script>
-

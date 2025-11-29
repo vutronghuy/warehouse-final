@@ -64,18 +64,7 @@
                 </div>
 
                 <div v-else class="max-h-40 overflow-auto border rounded p-2">
-                  <div class="flex items-center mb-2">
-                    <input
-                      id="edit-select-all"
-                      type="checkbox"
-                      :checked="allAdminSelected"
-                      @change="toggleSelectAllAdmin($event)"
-                      class="mr-2"
-                      :disabled="loading"
-                    />
-                    <label for="edit-select-all" class="text-sm">Select all</label>
-                  </div>
-
+              
                   <div v-for="wh in warehouses" :key="wh._id" class="flex items-center py-1">
                     <input
                       type="checkbox"

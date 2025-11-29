@@ -999,7 +999,7 @@ const initializeSocket = () => {
     console.log('📊 chart-data-updated', data);
     // If backend gives type + payload, we try to do incremental update
     try {
-      if (data?.type === 'invoice' && data?.payload) {
+      if (data && data.type === 'invoice' && data.payload) {
         const invoice = data.payload;
         const p1 = incrementTopProductsFromInvoice(invoice);
         const p2 = incrementCashFlowFromInvoice(invoice);
@@ -1010,11 +1010,11 @@ const initializeSocket = () => {
           refreshCompareChart();
         }
         return;
-      } else if (data?.type === 'products' && data?.payload) {
+      } else if (data && data.type === 'products' && data.payload) {
         // payload may contain product updates; refresh top products incremental
         fetchTopProducts(); // safe small call; or attempt incremental if payload structured
         return;
-      } else if (data?.type === 'inventory' && data?.payload) {
+      } else if (data && data.type === 'inventory' && data.payload) {
         // for inventory updates, fetch inventory series
         fetchInventoryValue();
         return;
@@ -1030,19 +1030,25 @@ const initializeSocket = () => {
   // Invoice events — do incremental updates when possible
   socketService.on('invoice-approved', (payload) => {
     console.log('✅ invoice-approved', payload);
-    // payload ideally contains the invoice detail
-    if (payload && (payload.items || payload.finalAmount || payload.total)) {
-      const invoice = payload;
-      const done1 = incrementTopProductsFromInvoice(invoice);
-      const done2 = incrementCashFlowFromInvoice(invoice);
-      const done3 = incrementCompareSeriesFromInvoice(invoice);
-      if (!done1 && !done2 && !done3) {
-        // fallback: refresh
+    try {
+      // payload ideally contains the invoice detail
+      if (payload && (payload.items || payload.finalAmount || payload.total)) {
+        const invoice = payload;
+        const done1 = incrementTopProductsFromInvoice(invoice);
+        const done2 = incrementCashFlowFromInvoice(invoice);
+        const done3 = incrementCompareSeriesFromInvoice(invoice);
+        if (!done1 && !done2 && !done3) {
+          // fallback: refresh
+          refreshCharts();
+          refreshCompareChart();
+        }
+      } else {
+        // fallback if payload not detailed
         refreshCharts();
         refreshCompareChart();
       }
-    } else {
-      // fallback if payload not detailed
+    } catch (error) {
+      console.error('Error handling invoice-approved:', error);
       refreshCharts();
       refreshCompareChart();
     }
@@ -1051,38 +1057,61 @@ const initializeSocket = () => {
   // For created/updated/deleted invoice events we try to be smart:
   socketService.on('invoice-created', (payload) => {
     console.log('📄 invoice-created', payload);
-    // treat similar to approved (increment revenue & products)
-    if (payload) {
-      const invoice = payload;
-      incrementTopProductsFromInvoice(invoice);
-      incrementCashFlowFromInvoice(invoice);
-      incrementCompareSeriesFromInvoice(invoice);
-    } else {
+    try {
+      // treat similar to approved (increment revenue & products)
+      if (payload) {
+        const invoice = payload;
+        incrementTopProductsFromInvoice(invoice);
+        incrementCashFlowFromInvoice(invoice);
+        incrementCompareSeriesFromInvoice(invoice);
+      } else {
+        refreshCharts({ topProducts: true, cashSummary: true, cashSeries: true, inventory: false });
+      }
+    } catch (error) {
+      console.error('Error handling invoice-created:', error);
       refreshCharts({ topProducts: true, cashSummary: true, cashSeries: true, inventory: false });
     }
   });
 
   socketService.on('invoice-deleted', (payload) => {
     console.log('🗑️ invoice-deleted', payload);
-    // safer to refresh full data on delete to avoid negative/inconsistent adjustments
-    refreshCharts();
-    refreshCompareChart();
+    try {
+      // safer to refresh full data on delete to avoid negative/inconsistent adjustments
+      refreshCharts();
+      refreshCompareChart();
+    } catch (error) {
+      console.error('Error handling invoice-deleted:', error);
+      refreshCharts();
+      refreshCompareChart();
+    }
   });
 
   socketService.on('invoice-rejected', (payload) => {
     console.log('❌ invoice-rejected', payload);
-    // rejected invoices shouldn't affect totals; refresh to be safe
-    refreshCharts();
-    refreshCompareChart();
+    try {
+      // rejected invoices shouldn't affect totals; refresh to be safe
+      refreshCharts();
+      refreshCompareChart();
+    } catch (error) {
+      console.error('Error handling invoice-rejected:', error);
+      refreshCharts();
+      refreshCompareChart();
+    }
   });
 
   socketService.on('invoice-status-changed', (data) => {
     console.log('🔄 invoice-status-changed', data);
     // if status changed to approved -> handle as approved; else refresh
-    if (data?.status === 'approved' && data?.payload) {
-      incrementTopProductsFromInvoice(data.payload);
-      incrementCashFlowFromInvoice(data.payload);
-      incrementCompareSeriesFromInvoice(data.payload);
+    if (data && data.status === 'approved' && data.payload) {
+      try {
+        incrementTopProductsFromInvoice(data.payload);
+        incrementCashFlowFromInvoice(data.payload);
+        incrementCompareSeriesFromInvoice(data.payload);
+      } catch (error) {
+        console.error('Error handling invoice-status-changed:', error);
+        refreshCharts();
+        refreshCompareChart();
+      }
     } else {
       refreshCharts();
       refreshCompareChart();

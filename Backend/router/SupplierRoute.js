@@ -41,8 +41,12 @@ router.post('/', verifyToken, requireAdminOrSuperAdmin, supplierController.creat
 // PUT /api/suppliers/:id - Update supplier (Admin and Super Admin only)
 router.put('/:id', verifyToken, requireAdminOrSuperAdmin, supplierController.updateSupplier);
 
-// DELETE /api/suppliers/:id - Delete supplier (Super Admin only)
+// DELETE /api/suppliers/:id - Soft delete supplier (Super Admin only)
+// Query param: ?hardDelete=true for permanent deletion (Super Admin only)
 router.delete('/:id', verifyToken, requireSuperAdmin, supplierController.deleteSupplier);
+
+// POST /api/suppliers/:id/restore - Restore soft-deleted supplier (Super Admin only)
+router.post('/:id/restore', verifyToken, requireSuperAdmin, supplierController.restoreSupplier);
 
 // Legacy route for backward compatibility
 router.post('/create', supplierController.createSupplier);

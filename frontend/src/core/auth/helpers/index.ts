@@ -14,11 +14,14 @@ export const authGuard = async ({
   canAccess: boolean;
   redirectTo: any;
 }> => {
+  console.log('🛡️ authGuard triggered for:', to.path, 'fullPath:', to.fullPath);
+
   // Public routes that don't require authentication
   const publicRoutes = ['/login', '/forgot/email', '/forgot/otp', '/forgot/new-password', '/test-routes'];
 
   // If accessing a public route, allow access
   if (publicRoutes.includes(to.path)) {
+    console.log('✅ Public route, allowing access');
     return {
       canAccess: true,
       redirectTo: {},
@@ -27,12 +30,17 @@ export const authGuard = async ({
 
   // Check if user is authenticated
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  console.log('🔑 Token found:', !!token, 'from localStorage:', !!localStorage.getItem('token'), 'from sessionStorage:', !!sessionStorage.getItem('token'));
 
   if (!token) {
     // No token, redirect to login
+    console.log('❌ No token, redirecting to login');
     return {
       canAccess: false,
-      redirectTo: '/login',
+      redirectTo: {
+        path: '/login',
+        query: { redirect: to.fullPath } // Use 'redirect' to match Login.vue
+      },
     };
   }
 
@@ -40,29 +48,45 @@ export const authGuard = async ({
     // Verify token is valid (basic check)
     const payload = JSON.parse(atob(token.split('.')[1]));
     const now = Date.now() / 1000;
+    console.log('📋 Token payload:', {
+      role: payload.role,
+      isSuperAdmin: payload.isSuperAdmin,
+      exp: payload.exp,
+      now: now,
+      expired: payload.exp && payload.exp < now
+    });
 
     if (payload.exp && payload.exp < now) {
       // Token expired, redirect to login
+      console.log('❌ Token expired, redirecting to login');
       localStorage.removeItem('token');
       sessionStorage.removeItem('token');
       return {
         canAccess: false,
-        redirectTo: '/login',
+        redirectTo: {
+          path: '/login',
+          query: { redirect: to.fullPath } // Use 'redirect' to match Login.vue
+        },
       };
     }
 
     // Token is valid, allow access
+    console.log('✅ Token valid, allowing access');
     return {
       canAccess: true,
       redirectTo: {},
     };
   } catch (error) {
     // Invalid token, redirect to login
+    console.error('❌ Invalid token, redirecting to login:', error);
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     return {
       canAccess: false,
-      redirectTo: '/login',
+      redirectTo: {
+        path: '/login',
+        query: { redirect: to.fullPath } // Use 'redirect' to match Login.vue
+      },
     };
   }
 };

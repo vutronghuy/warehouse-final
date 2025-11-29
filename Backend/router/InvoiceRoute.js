@@ -85,6 +85,17 @@ router.get('/total-revenue', disableCache, verifyToken, requireStaffOrAbove, inv
 router.get('/', disableCache, verifyToken, requireStaffOrAbove, invoiceController.getAllInvoices);
 
 
+// GET /api/invoices/:id/pdf - Export invoice as PDF (must be before /:id route)
+router.get('/:id/pdf', verifyToken, requireStaffOrAbove, (req, res, next) => {
+  // Disable caching for PDF responses
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  next();
+}, invoiceController.exportInvoiceAsPDF);
+
 // GET /api/invoices/:id - Get single invoice
 router.get('/:id', verifyToken, requireStaffOrAbove, invoiceController.getInvoiceById);
 

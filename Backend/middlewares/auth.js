@@ -14,10 +14,6 @@ function devLog(...args) {
   }
 }
 
-/**
- * verifyToken: kiểm tra JWT (header Bearer hoặc cookie.token),
- *            attach decoded payload -> req.user (normalized)
- */
 exports.verifyToken = (req, res, next) => {
   try {
     // Try Authorization header first
@@ -69,10 +65,6 @@ exports.verifyToken = (req, res, next) => {
   }
 };
 
-/**
- * requireSuperAdmin: kiểm tra trực tiếp trên DB để đảm bảo quyền hiện tại của user
- * (bảo đảm token cũ / quyền bị thay đổi cũng được phát hiện)
- */
 exports.requireSuperAdmin = async (req, res, next) => {
   try {
     if (!req.user || !req.user.sub) {
@@ -196,11 +188,6 @@ exports.requireWarehouseAccess = (warehouseIdParam = 'warehouseId') => {
   };
 };
 
-/**
- * checkUserStatus: kiểm tra user có bị deactivate không
- * - bảo đảm user vẫn active ở DB (DB-check)
- * - optional: invalidate token if token issued before lastPasswordChangeAt
- */
 exports.checkUserStatus = async (req, res, next) => {
   try {
     const userId = req.user?.sub || req.user?.id;

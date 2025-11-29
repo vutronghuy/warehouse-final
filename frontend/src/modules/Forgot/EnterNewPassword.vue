@@ -49,9 +49,9 @@
               </svg>
             </div>
             <div class="text-center sm:text-left">
-              <h2 class="text-2xl font-semibold text-white text-center">Thiết lập mật khẩu mới</h2>
+              <h2 class="text-2xl font-semibold text-white text-center">Set new password</h2>
               <p class="text-sm text-white/80 mt-2 text-center">
-                Vui lòng tạo mật khẩu đáp ứng đầy đủ các tiêu chí bên dưới.
+                Please create a password that meets all of the criteria below.
               </p>
             </div>
           </div>
@@ -91,35 +91,35 @@
             </div>
 
             <div class="text-xs text-gray-700 bg-white/90 rounded-lg p-4 space-y-2 shadow-sm">
-              <span class="font-medium text-gray-900">Yêu cầu để tiếp tục:</span>
+              <span class="font-medium text-gray-900">Requirements to continue:</span>
               <ul class="space-y-1">
                 <li class="flex items-center" :class="validations.hasLowerCase ? 'text-green-600' : 'text-gray-600'">
                   <span
                     class="w-1.5 h-1.5 rounded-full mr-2"
                     :class="validations.hasLowerCase ? 'bg-green-500' : 'bg-gray-400'"
                   ></span>
-                  Ít nhất một ký tự viết thường
+                  At least one lowercase character
                 </li>
                 <li class="flex items-center" :class="validations.hasUpperCase ? 'text-green-600' : 'text-gray-600'">
                   <span
                     class="w-1.5 h-1.5 rounded-full mr-2"
                     :class="validations.hasUpperCase ? 'bg-green-500' : 'bg-gray-400'"
                   ></span>
-                  Ít nhất một ký tự viết hoa
+                  At least one uppercase character
                 </li>
                 <li class="flex items-center" :class="validations.hasMinLength ? 'text-green-600' : 'text-gray-600'">
                   <span
                     class="w-1.5 h-1.5 rounded-full mr-2"
                     :class="validations.hasMinLength ? 'bg-green-500' : 'bg-gray-400'"
                   ></span>
-                  Độ dài từ 8&nbsp;-&nbsp;16 ký tự
+                  Length from 8&nbsp;-&nbsp;16 characters
                 </li>
                 <li class="flex items-center" :class="validations.hasSpecialChar ? 'text-green-600' : 'text-gray-600'">
                   <span
                     class="w-1.5 h-1.5 rounded-full mr-2"
                     :class="validations.hasSpecialChar ? 'bg-green-500' : 'bg-gray-400'"
                   ></span>
-                  Chỉ sử dụng chữ, số và ký tự phổ biến
+                  Use only common letters, numbers and characters
                 </li>
               </ul>
             </div>
@@ -136,13 +136,13 @@
                 : 'bg-gray-400 text-gray-200 cursor-not-allowed'
             ]"
           >
-            <span v-if="!isLoading">Đặt mật khẩu</span>
+            <span v-if="!isLoading">Set password</span>
             <span v-else class="flex items-center justify-center">
               <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Đang xử lý...
+              Processing...
             </span>
           </button>
 

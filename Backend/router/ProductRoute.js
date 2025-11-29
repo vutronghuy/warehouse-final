@@ -174,7 +174,11 @@ router.post('/', verifyToken, requireAdminOrSuperAdmin, productController.create
 // PUT /api/products/:id - Update product (Admin and Super Admin only)
 router.put('/:id', verifyToken, requireAdminOrSuperAdmin, productController.updateProduct);
 
-// DELETE /api/products/:id - Delete product (Super Admin only)
+// DELETE /api/products/:id - Soft delete product (Super Admin only)
+// Query param: ?hardDelete=true for permanent deletion (Super Admin only)
 router.delete('/:id', verifyToken, requireSuperAdmin, productController.deleteProduct);
+
+// POST /api/products/:id/restore - Restore soft-deleted product (Super Admin only)
+router.post('/:id/restore', verifyToken, requireSuperAdmin, productController.restoreProduct);
 
 module.exports = router;

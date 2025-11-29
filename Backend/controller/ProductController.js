@@ -366,7 +366,83 @@ exports.updateProduct = async (req, res, next) => {
 };
 
 // Delete product (hard delete)
+// Soft delete product
 exports.deleteProduct = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { hardDelete } = req.query; // Optional: hardDelete=true for permanent deletion (super admin only)
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID'
+      });
+    }
+
+    // Find product first to check if it exists (include deleted ones for hard delete check)
+    const product = await Product.findOne({ _id: id });
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    // Check if already soft deleted
+    if (product.deletedAt && !hardDelete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product is already deleted'
+      });
+    }
+
+    let deletedProduct;
+    let message;
+
+    if (hardDelete === 'true' && req.user?.isSuperAdmin) {
+      // Hard delete - only for super admin
+      deletedProduct = await Product.findByIdAndDelete(id);
+      message = 'Product permanently deleted from database';
+      console.log(`✅ Product permanently deleted: ${deletedProduct.name} (SKU: ${deletedProduct.sku})`);
+    } else {
+      // Soft delete - set deletedAt timestamp
+      deletedProduct = await Product.findByIdAndUpdate(
+        id,
+        { 
+          deletedAt: new Date(),
+          updatedBy: req.user?.sub || req.user?.id
+        },
+        { new: true }
+      );
+      message = 'Product deleted successfully (soft delete)';
+      console.log(`✅ Product soft deleted: ${deletedProduct.name} (SKU: ${deletedProduct.sku})`);
+    }
+
+    if (!deletedProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found or already deleted'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: message,
+      deletedProduct: {
+        id: deletedProduct._id,
+        name: deletedProduct.name,
+        sku: deletedProduct.sku,
+        deletedAt: deletedProduct.deletedAt || null
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    next(error);
+  }
+};
+
+// Restore soft-deleted product
+exports.restoreProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -377,38 +453,38 @@ exports.deleteProduct = async (req, res, next) => {
       });
     }
 
-    // Find product first to check if it exists
-    const product = await Product.findById(id);
+    // Find product including deleted ones
+    const product = await Product.findOne({ _id: id, deletedAt: { $ne: null } });
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: 'Deleted product not found'
       });
     }
 
-    // Hard delete - permanently remove from database
-    const deletedProduct = await Product.findByIdAndDelete(id);
+    // Restore by setting deletedAt to null
+    const restoredProduct = await Product.findByIdAndUpdate(
+      id,
+      { 
+        deletedAt: null,
+        updatedBy: req.user?.sub || req.user?.id
+      },
+      { new: true }
+    );
 
-    if (!deletedProduct) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found or already deleted'
-      });
-    }
-
-    console.log(`✅ Product permanently deleted: ${deletedProduct.name} (SKU: ${deletedProduct.sku})`);
+    console.log(`✅ Product restored: ${restoredProduct.name} (SKU: ${restoredProduct.sku})`);
 
     res.json({
       success: true,
-      message: 'Product permanently deleted from database',
-      deletedProduct: {
-        id: deletedProduct._id,
-        name: deletedProduct.name,
-        sku: deletedProduct.sku
+      message: 'Product restored successfully',
+      product: {
+        id: restoredProduct._id,
+        name: restoredProduct.name,
+        sku: restoredProduct.sku
       }
     });
   } catch (error) {
-    console.error('Error deleting product:', error);
+    console.error('Error restoring product:', error);
     next(error);
   }
 };

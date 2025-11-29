@@ -35,7 +35,7 @@ async function main() {
     const config = {
       connections: {
         default: {
-          uri: "${MONGO_URI}", // giữ placeholder để an toàn; bạn có thể replace bằng MONGO_URI nếu muốn (cẩn thận)
+          uri: "${MONGO_URI}", 
           database: DB_NAME,
           collections: names
         }

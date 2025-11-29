@@ -53,6 +53,15 @@ const productSchema = new Schema(
   { timestamps: true }
 );
 
+// Query middleware to exclude soft-deleted records by default
+productSchema.pre(/^find/, function (next) {
+  // Only exclude deleted records if deletedAt is not explicitly queried
+  if (this.getQuery().deletedAt === undefined) {
+    this.where({ deletedAt: null });
+  }
+  next();
+});
+
 // Pre-save middleware to calculate finalPrice
 productSchema.pre("save", function (next) {
   // Calculate final price based on base price and markup percentage

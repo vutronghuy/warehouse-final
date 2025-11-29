@@ -25,11 +25,27 @@ export function getUserRole(): string | null {
 export function isSuperAdmin(): boolean {
   try {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) return false;
+    if (!token) {
+      console.log('🔐 isSuperAdmin: No token found');
+      return false;
+    }
 
     const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.isSuperAdmin === true;
+    // Check multiple ways: boolean true, string 'true', or number 1
+    const isSuper = payload.isSuperAdmin === true ||
+                    payload.isSuperAdmin === 'true' ||
+                    payload.isSuperAdmin === 1 ||
+                    String(payload.isSuperAdmin).toLowerCase() === 'true';
+
+    console.log('🔐 isSuperAdmin check:', {
+      isSuperAdmin: payload.isSuperAdmin,
+      type: typeof payload.isSuperAdmin,
+      result: isSuper,
+      rawValue: payload.isSuperAdmin
+    });
+    return isSuper;
   } catch (error) {
+    console.error('❌ Error in isSuperAdmin:', error);
     return false;
   }
 }
@@ -51,22 +67,76 @@ export function requireAuth(
   }
 }
 
+// Persistent logging helper
+const persistentLog = (message, data = null) => {
+  const timestamp = new Date().toISOString();
+  const logEntry = { timestamp, message, data: data ? JSON.stringify(data) : null };
+  try {
+    const logs = JSON.parse(localStorage.getItem('router_logs') || '[]');
+    logs.push(logEntry);
+    // Keep only last 100 logs
+    if (logs.length > 100) logs.shift();
+    localStorage.setItem('router_logs', JSON.stringify(logs));
+  } catch (e) {
+    // Ignore storage errors
+  }
+  console.log(message, data || '');
+};
+
 // Route guard cho super admin
 export function requireSuperAdmin(
   to: RouteLocationNormalized,
   from: RouteLocationNormalized,
   next: NavigationGuardNext
 ) {
-  if (!isAuthenticated()) {
-    next('/login');
+  persistentLog('🔒 requireSuperAdmin guard triggered', { path: to.path, fullPath: to.fullPath });
+  console.log('🔒 requireSuperAdmin guard triggered for:', to.path);
+
+  const isAuth = isAuthenticated();
+  persistentLog('🔐 isAuthenticated', { result: isAuth });
+  console.log('🔐 isAuthenticated:', isAuth);
+
+  if (!isAuth) {
+    persistentLog('❌ Not authenticated, redirecting to login');
+    console.log('❌ Not authenticated, redirecting to login');
+    next({
+      path: '/login',
+      query: { redirect: to.fullPath } // Use 'redirect' to match Login.vue
+    });
     return;
   }
 
-  if (isSuperAdmin()) {
+  const isSuper = isSuperAdmin();
+  const role = getUserRole();
+  persistentLog('👤 Role check', { role, isSuperAdmin: isSuper });
+  console.log('👤 Role:', role, 'isSuperAdmin:', isSuper);
+
+  // Try to get token payload for debugging
+  try {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      persistentLog('📋 Token payload', payload);
+      console.log('📋 Token payload:', {
+        role: payload.role,
+        isSuperAdmin: payload.isSuperAdmin,
+        exp: payload.exp,
+        iat: payload.iat
+      });
+    }
+  } catch (error) {
+    persistentLog('❌ Error decoding token', { error: error.message });
+    console.error('❌ Error decoding token:', error);
+  }
+
+  if (isSuper) {
+    persistentLog('✅ Super admin access granted');
+    console.log('✅ Super admin access granted');
     next();
   } else {
+    persistentLog('❌ Not super admin, redirecting based on role', { role });
+    console.log('❌ Not super admin, redirecting based on role');
     // Không có quyền, chuyển về trang phù hợp với role
-    const role = getUserRole();
     switch (role) {
       case 'admin':
         next('/admin');
@@ -81,7 +151,10 @@ export function requireSuperAdmin(
         next('/accounter');
         break;
       default:
-        next('/login');
+        next({
+          path: '/login',
+          query: { redirect: to.fullPath } // Use 'redirect' to match Login.vue
+        });
     }
   }
 }

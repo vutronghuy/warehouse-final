@@ -10,17 +10,16 @@
         required: true,
       },
       quantity: { type: Number, default: 0, min: 0 },
-      reservedQuantity: { type: Number, default: 0, min: 0 },
       lastUpdated: { type: Date, default: Date.now },
       updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     },
     { timestamps: false }
   );
 
-  // virtual
-  inventorySchema.virtual("availableQuantity").get(function () {
-    return this.quantity - this.reservedQuantity;
-  });
+  // Index để query nhanh
   inventorySchema.index({ productId: 1, warehouseId: 1 }, { unique: true });
+  inventorySchema.index({ warehouseId: 1 });
+  inventorySchema.index({ productId: 1 });
+  inventorySchema.index({ lastUpdated: -1 });
 
   module.exports = mongoose.model("Inventory", inventorySchema);

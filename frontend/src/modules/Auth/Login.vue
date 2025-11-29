@@ -195,7 +195,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, ref } from 'vue';
+import { reactive, computed, ref, onUnmounted } from 'vue';
 import axios from 'axios';
 import { useRouter, useRoute } from 'vue-router';
 
@@ -213,6 +213,7 @@ const passwordError = ref('');
 const errorMessage = ref(''); // server/client error message
 const showPassword = ref(false);
 const isSubmitting = ref(false);
+let countdownInterval = null; // Store interval reference for cleanup
 
 // ---------- validation ----------
 const isFormValid = computed(() => {
@@ -288,6 +289,9 @@ const parseJwt = (token) => {
 };
 
 const handleSubmit = async () => {
+  // Prevent duplicate submissions
+  if (isSubmitting.value) return;
+
   // client validation
   validateEmail();
   validatePassword();
@@ -304,7 +308,49 @@ const handleSubmit = async () => {
       password: formData.password
     };
 
-    const res = await axios.post('/api/auth/login', payload);
+    let res;
+    try {
+      // Tạm thời override console.error để ẩn lỗi 429
+      const originalConsoleError = console.error;
+      const originalConsoleWarn = console.warn;
+
+      console.error = (...args) => {
+        // Bỏ qua lỗi 429
+        if (args[0]?.includes?.('429') || args[0]?.includes?.('Too Many Requests')) {
+          return;
+        }
+        originalConsoleError.apply(console, args);
+      };
+
+      console.warn = (...args) => {
+        // Bỏ qua cảnh báo về 429
+        if (args[0]?.includes?.('429') || args[0]?.includes?.('Too Many Requests')) {
+          return;
+        }
+        originalConsoleWarn.apply(console, args);
+      };
+
+      try {
+        res = await axios.post('/api/auth/login', payload);
+      } finally {
+        // Khôi phục console.error và console.warn
+        console.error = originalConsoleError;
+        console.warn = originalConsoleWarn;
+      }
+    } catch (err) {
+      // Xử lý lỗi 429 - không hiển thị và không log
+      if (err?.response?.status === 429 || err?.silent) {
+        errorMessage.value = '';
+        if (countdownInterval) {
+          clearInterval(countdownInterval);
+          countdownInterval = null;
+        }
+        isSubmitting.value = false;
+        return; // Trả về ngay, không throw lỗi
+      }
+      // Các lỗi khác tiếp tục throw
+      throw err;
+    }
     const { token, user } = res.data || {};
 
     if (!token) {
@@ -371,13 +417,52 @@ const handleSubmit = async () => {
     await router.push(routeTo);
 
   } catch (err) {
+    // Handle 429 rate limit error - không hiển thị thông báo lỗi và không log
+    if (err?.response?.status === 429 || err?.silent) {
+      // Clear error message và cleanup interval
+      errorMessage.value = '';
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+      // Không hiển thị thông báo lỗi và không log cho 429
+      return;
+    }
+
+    // Chỉ log các lỗi khác 429
     console.error('Login error:', err);
-    const serverMessage = err?.response?.data?.message || err?.message || 'Login failed. Please try again.';
+
+    // Clear interval if not a rate limit error
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+
+    // Handle other errors
+    let serverMessage = 'Đăng nhập thất bại. Vui lòng thử lại.';
+
+    if (err?.response?.data) {
+      const data = typeof err.response.data === 'string'
+        ? JSON.parse(err.response.data || '{}')
+        : err.response.data;
+      serverMessage = data?.message || data?.error || serverMessage;
+    } else if (err?.message) {
+      serverMessage = err.message;
+    }
+
     errorMessage.value = serverMessage;
   } finally {
     isSubmitting.value = false;
   }
 };
+
+// Cleanup on component unmount
+onUnmounted(() => {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+});
 
 </script>
 

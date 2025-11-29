@@ -42,6 +42,44 @@ axios.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Global response interceptor để静默处理 429 错误
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // 静默处理 429 错误
+    if (error?.response?.status === 429) {
+      // Đánh dấu là lỗi im lặng
+      error.silent = true;
+      // Tạo một error object đặc biệt để không trigger console logs
+      const silentError = new Error('');
+      silentError.name = '';
+      silentError.message = '';
+      silentError.stack = '';
+      // Copy các thuộc tính cần thiết
+      Object.defineProperty(silentError, 'response', {
+        value: error.response,
+        writable: false,
+        enumerable: false
+      });
+      Object.defineProperty(silentError, 'config', {
+        value: error.config,
+        writable: false,
+        enumerable: false
+      });
+      Object.defineProperty(silentError, 'silent', {
+        value: true,
+        writable: false,
+        enumerable: false
+      });
+      // Override toString để không hiển thị gì
+      silentError.toString = () => '';
+      return Promise.reject(silentError);
+    }
+    // 其他错误正常处理
+    return Promise.reject(error);
+  }
+);
+
 // (tùy chọn) helper giải mã token (nếu cần ở frontend)
 export function parseJwt(token: string | null) {
   if (!token) return null;
@@ -92,3 +130,34 @@ socket.on('force-logout', (data) => {
 });
 
 app.mount('#__app');
+
+// Debug helper: View router and component logs
+(window as any).viewLogs = () => {
+  const routerLogs = JSON.parse(localStorage.getItem('router_logs') || '[]');
+  const componentLogs = JSON.parse(localStorage.getItem('component_logs') || '[]');
+
+  console.group('📋 Router Logs');
+  routerLogs.forEach((log: any) => {
+    console.log(`[${log.timestamp}] ${log.message}`, log.data ? JSON.parse(log.data) : '');
+  });
+  console.groupEnd();
+
+  console.group('📋 Component Logs');
+  componentLogs.forEach((log: any) => {
+    console.log(`[${log.timestamp}] ${log.message}`, log.data || '');
+  });
+  console.groupEnd();
+
+  return { routerLogs, componentLogs };
+};
+
+// Debug helper: Clear logs
+(window as any).clearLogs = () => {
+  localStorage.removeItem('router_logs');
+  localStorage.removeItem('component_logs');
+  console.log('✅ Logs cleared');
+};
+
+console.log('💡 Debug helpers available:');
+console.log('  - viewLogs() - View all router and component logs');
+console.log('  - clearLogs() - Clear all logs');

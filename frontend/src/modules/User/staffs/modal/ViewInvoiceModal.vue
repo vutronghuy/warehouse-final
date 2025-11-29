@@ -147,6 +147,13 @@
       <!-- Actions -->
       <div class="mt-4 flex justify-end gap-2">
         <button
+          @click="downloadPDF"
+          :disabled="isDownloading"
+          class="px-4 py-2 border rounded text-purple-600 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {{ isDownloading ? 'Loading...' : 'Download PDF' }}
+        </button>
+        <button
           v-if="canEdit"
           @click="onEdit"
           class="px-4 py-2 border rounded text-green-700 hover:bg-green-50"
@@ -171,6 +178,7 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
+import axios from 'axios';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -182,6 +190,7 @@ const emit = defineEmits(['close', 'edit', 'delete', 'change-status']);
 
 // Scroll management
 const scrollY = ref(0); // Store scroll position for body scroll prevention
+const isDownloading = ref(false);
 
 const items = computed(() => {
   // invoice may contain items array, or exportReceipt items
@@ -302,5 +311,135 @@ function formatDateTime(dateString) {
 function confirmDelete() {
   if (!confirm('Are you sure you want to delete this invoice?')) return;
   emit('delete', props.invoice);
+}
+
+async function downloadPDF() {
+  if (!props.invoice?._id || isDownloading.value) return;
+
+  isDownloading.value = true;
+  try {
+    // Get baseURL from axios config or use default
+    const baseURL = axios.defaults.baseURL || import.meta.env.VITE_API_URL || 'http://localhost:3003';
+    const apiUrl = `${baseURL}/api/invoices/${props.invoice._id}/pdf`;
+
+    // Use axios with responseType: 'blob' to handle PDF binary data
+    const response = await axios.get(apiUrl, {
+      responseType: 'blob',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
+      },
+    });
+
+    // Check if response is actually PDF
+    const contentType = response.headers['content-type'] || response.headers['Content-Type'];
+
+    if (!contentType || !contentType.includes('application/pdf')) {
+      // If not PDF, try to read as text to get error message
+      const text = await response.data.text();
+      let errorMessage = 'Phản hồi không phải là file PDF hợp lệ';
+      try {
+        const errorJson = JSON.parse(text);
+        errorMessage = errorJson.message || errorMessage;
+      } catch (e) {
+        if (text && text.length < 500) {
+          errorMessage = text;
+        }
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Get the blob from response
+    const blob = response.data;
+
+    // Verify blob is not empty
+    if (blob.size === 0) {
+      throw new Error('File PDF trống');
+    }
+
+    // Verify it's actually a PDF by checking first bytes
+    const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const pdfSignature = [0x25, 0x50, 0x44, 0x46]; // %PDF
+    const isPDF = uint8Array.every((byte, index) => byte === pdfSignature[index]);
+
+    if (!isPDF) {
+      // Try to read as text to get error message
+      const text = await blob.text();
+      let errorMessage = 'File không phải là PDF hợp lệ';
+      try {
+        const errorJson = JSON.parse(text);
+        errorMessage = errorJson.message || errorMessage;
+      } catch (e) {
+        if (text && text.length < 500) {
+          errorMessage = text.substring(0, 200);
+        }
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Get filename from Content-Disposition header or use default
+    let fileName = `Invoice-${props.invoice.invoiceNumber || props.invoice._id}.pdf`;
+    const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition'];
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (fileNameMatch && fileNameMatch[1]) {
+        fileName = fileNameMatch[1].replace(/['"]/g, '');
+        // Decode URI if encoded
+        try {
+          fileName = decodeURIComponent(fileName);
+        } catch (e) {
+          // If decode fails, use as is
+        }
+      }
+    }
+
+    // Create a download link
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+
+    // Clean up
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }, 100);
+  } catch (error) {
+    console.error('Error downloading PDF:', error);
+    let errorMessage = 'Vui lòng thử lại';
+
+    if (error.response) {
+      // Axios error with response
+      const contentType = error.response.headers['content-type'] || error.response.headers['Content-Type'];
+      if (contentType && contentType.includes('application/json')) {
+        errorMessage = error.response.data?.message || errorMessage;
+      } else if (error.response.data) {
+        // Try to read as text
+        try {
+          const text = await error.response.data.text();
+          try {
+            const errorJson = JSON.parse(text);
+            errorMessage = errorJson.message || errorMessage;
+          } catch (e) {
+            if (text && text.length < 500) {
+              errorMessage = text;
+            }
+          }
+        } catch (e) {
+          errorMessage = error.response.statusText || errorMessage;
+        }
+      } else {
+        errorMessage = error.response.statusText || errorMessage;
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    alert(`Lỗi khi tải PDF: ${errorMessage}`);
+  } finally {
+    isDownloading.value = false;
+  }
 }
 </script>

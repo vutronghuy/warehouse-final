@@ -9,6 +9,19 @@ const socketService = require('./services/socketService');
 const fs = require('fs');
 const { exec } = require('child_process');
 
+// Import new utilities and middlewares
+const { validateEnv } = require('./utils/validateEnv');
+const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
+const { apiRateLimiter, authRateLimiter } = require('./middlewares/rateLimiter');
+
+// Validate environment variables before starting
+try {
+  validateEnv();
+} catch (error) {
+  console.error('❌ Environment validation failed:', error.message);
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3003;
 
@@ -58,7 +71,8 @@ const corsOptions = {
     'Pragma',
     'Expires',
     'If-None-Match',
-    'Last-Modified'
+    'Last-Modified',
+    'If-Modified-Since'
   ]
 };
 
@@ -79,18 +93,71 @@ const reportsRoute = require('./router/reports');
 const auditRoute = require('./router/auditRoute');
 const userRoleRoute = require('./router/userRoleRoute');
 const chatRoute = require('./router/chatRoute');
+const inventoryRoute = require('./router/inventoryRoute');
+const v1Routes = require('./router/v1');
 
-// connect to mongodb (existing)
+// Connect to MongoDB with retry logic
 const dbURI = process.env.DB_URI || process.env.MONGO_URI;
-mongoose.connect(dbURI)
-  .then(() => console.log('Connected to MongoDB Atlas'))
-  .catch(err => console.error('Error connecting to MongoDB:', err));
+const maxRetries = 5;
+const retryDelay = 5000; // 5 seconds
+
+async function connectMongoDB(retries = maxRetries) {
+  try {
+    const options = {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    };
+    
+    await mongoose.connect(dbURI, options);
+    console.log('✅ Connected to MongoDB Atlas');
+    
+    // Handle connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err);
+    });
+    
+    mongoose.connection.on('disconnected', () => {
+      console.warn('⚠️  MongoDB disconnected. Attempting to reconnect...');
+      setTimeout(() => connectMongoDB(maxRetries), retryDelay);
+    });
+    
+    mongoose.connection.on('reconnected', () => {
+      console.log('✅ MongoDB reconnected');
+    });
+    
+  } catch (err) {
+    console.error(`❌ Error connecting to MongoDB (attempt ${maxRetries - retries + 1}/${maxRetries}):`, err.message);
+    
+    if (retries > 0) {
+      console.log(`⏳ Retrying in ${retryDelay / 1000} seconds...`);
+      setTimeout(() => connectMongoDB(retries - 1), retryDelay);
+    } else {
+      console.error('❌ Failed to connect to MongoDB after all retries. Exiting...');
+      process.exit(1);
+    }
+  }
+}
+
+connectMongoDB();
 
 app.use(express.json());
 app.use(express.text());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors(corsOptions));
+
+// Apply rate limiting (before routes)
+// Bỏ rate limiting cho /api/auth/login để cho phép login tự do
+app.use('/api/auth', (req, res, next) => {
+  // Bỏ qua rate limiting cho endpoint login
+  if (req.path === '/login' || req.path === '/login/') {
+    return next();
+  }
+  // Áp dụng rate limiting cho các auth endpoints khác
+  return authRateLimiter(req, res, next);
+});
+app.use('/api', apiRateLimiter); // General API rate limiting
 
 // Add request logging middleware
 app.use((req, res, next) => {
@@ -102,7 +169,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// existing routers
+// API v1 routes (new versioned API)
+app.use('/api/v1', v1Routes);
+
+// Legacy routes (backward compatibility - keep existing routes working)
 app.use('/api/suppliers', supplierRoute);
 app.use('/api/categories', categoryRoute);
 app.use('/api/customers', customerRoute);
@@ -127,6 +197,25 @@ app.use('/api/targets', targetRoute);
 app.use('/api/audit', auditRoute);
 app.use('/api/user-roles', userRoleRoute);
 app.use('/chat', chatRoute);
+app.use('/api/inventory', inventoryRoute);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const healthStatus = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB'
+    }
+  };
+  
+  const statusCode = healthStatus.database === 'connected' ? 200 : 503;
+  res.status(statusCode).json(healthStatus);
+});
 
 app.get('/', (req, res) => {
   res.send('Backend Node.js is running!');
@@ -168,6 +257,12 @@ app.get('/admin/config', (req, res) => {
   }
 });
 // ---------------- End admin endpoints ----------------
+
+// 404 handler (must be before error handler)
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(errorHandler);
 
 // Tạo HTTP server
 const server = createServer(app);

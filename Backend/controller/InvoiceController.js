@@ -5,6 +5,7 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 const socketService = require("../services/socketService");
 const AuditService = require("../services/auditService");
+const PDFDocument = require("pdfkit");
 
 // Create invoice from export receipt (Staff only)
 const createInvoiceFromExport = async (req, res, next) => {
@@ -1313,6 +1314,343 @@ const deleteInvoice = async (req, res, next) => {
   }
 };
 
+// Export invoice as PDF
+const exportInvoiceAsPDF = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Validate MongoDB ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid invoice ID",
+      });
+    }
+
+    // Get user info
+    const user = await User.findById(req.user.sub).lean();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Find invoice with full population
+    const invoice = await Invoice.findById(id)
+      .populate("warehouseId", "name location")
+      .populate("createdByStaff", "staff.fullName staff.email")
+      .populate(
+        "accounterReview.reviewedBy",
+        "accounter.fullName accounter.email"
+      )
+      .populate(
+        "exportReceiptId",
+        "receiptNumber customerName customerPhone customerAddress"
+      )
+      .populate(
+        "details.productId",
+        "name sku finalPrice basePrice priceMarkupPercent"
+      )
+      .lean();
+
+    if (!invoice || invoice.deletedAt) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found",
+      });
+    }
+
+    // Check access permissions
+    const warehouseId = invoice.warehouseId?._id || invoice.warehouseId;
+    const createdByStaffId = invoice.createdByStaff?._id || invoice.createdByStaff;
+    
+    const canAccess =
+      user.isSuperAdmin ||
+      (user.role === "admin" &&
+        user.admin?.managedWarehouses?.some(
+          (wid) => wid.toString() === warehouseId.toString()
+        )) ||
+      (user.role === "accounter" &&
+        user.accounter?.warehouseId?.toString() === warehouseId.toString()) ||
+      (user.role === "staff" &&
+        createdByStaffId.toString() === req.user.sub);
+
+    if (!canAccess) {
+      console.log('PDF Export Access Denied:', {
+        userId: req.user.sub,
+        userRole: user.role,
+        invoiceId: invoice._id,
+        invoiceWarehouse: warehouseId,
+        createdBy: createdByStaffId
+      });
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You do not have permission to export this invoice.",
+      });
+    }
+
+    console.log('Starting PDF generation for invoice:', invoice.invoiceNumber);
+
+    // Set response headers BEFORE creating PDF
+    const fileName = `Invoice-${invoice.invoiceNumber || invoice._id}.pdf`;
+    // Clean filename to avoid issues
+    const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${cleanFileName}"`
+    );
+
+    // Create PDF document
+    const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: true });
+
+    // Handle PDF errors
+    doc.on('error', (err) => {
+      console.error('PDF generation error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: 'Error generating PDF'
+        });
+      }
+    });
+
+    // Handle response errors
+    res.on('error', (err) => {
+      console.error('Response error:', err);
+      if (doc && !doc.destroyed) {
+        doc.destroy();
+      }
+    });
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Helper function to format currency
+    const formatCurrency = (amount, currency = 'VND') => {
+      const num = Number(amount || 0);
+      if (currency === 'VND') {
+        return new Intl.NumberFormat('vi-VN').format(num) + ' ₫';
+      } else if (currency === 'USD') {
+        return '$' + new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+      } else if (currency === 'EUR') {
+        return '€' + new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+      }
+      return new Intl.NumberFormat('vi-VN').format(num) + ' ' + currency;
+    };
+
+    // Helper function to format date
+    const formatDate = (date) => {
+      if (!date) return 'N/A';
+      const d = new Date(date);
+      return d.toLocaleDateString('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    };
+
+    // Header
+    doc.fontSize(24).font('Helvetica-Bold').text('HÓA ĐƠN BÁN HÀNG', 50, 50, { align: 'center' });
+    doc.fontSize(14).font('Helvetica-Bold').text(`Invoice ${invoice.invoiceNumber}`, 50, 80, { align: 'center' });
+    
+    // Status badge
+    const statusMap = {
+      draft: { text: 'Draft', color: [128, 128, 128] },
+      pending_review: { text: 'Pending Review', color: [234, 179, 8] },
+      approved: { text: 'Approved', color: [34, 197, 94] },
+      rejected: { text: 'Rejected', color: [239, 68, 68] },
+      paid: { text: 'Paid', color: [59, 130, 246] }
+    };
+    const statusInfo = statusMap[invoice.status] || { text: invoice.status, color: [128, 128, 128] };
+    doc.fontSize(10).font('Helvetica-Bold');
+    doc.fillColor(statusInfo.color);
+    doc.text(`Status: ${statusInfo.text}`, 50, 100, { align: 'center' });
+    doc.fillColor('black');
+
+    // Two column layout: Customer Information (left) and Invoice Meta (right)
+    let yPos = 140;
+    
+    // Left column: Customer Information
+    doc.fontSize(11).font('Helvetica-Bold').text('Customer Information', 50, yPos);
+    yPos += 20;
+    doc.fontSize(10).font('Helvetica');
+    doc.text(`Name: ${invoice.customerName || '-'}`, 50, yPos);
+    yPos += 15;
+    doc.text(`Phone: ${invoice.customerPhone || '-'}`, 50, yPos);
+    yPos += 15;
+    doc.text(`Address: ${invoice.customerAddress || '-'}`, 50, yPos, { width: 240 });
+
+    // Right column: Invoice Meta
+    yPos = 140;
+    doc.fontSize(11).font('Helvetica-Bold').text('Invoice Details', 300, yPos);
+    yPos += 20;
+    doc.fontSize(10).font('Helvetica');
+    
+    const paymentConditionMap = {
+      cash: 'Cash',
+      net15: 'Net 15',
+      net30: 'Net 30',
+      net45: 'Net 45',
+      net60: 'Net 60'
+    };
+    doc.text(`Payment: ${paymentConditionMap[invoice.paymentCondition] || invoice.paymentCondition}`, 300, yPos);
+    yPos += 15;
+    doc.text(`Currency: ${invoice.currency || '-'}`, 300, yPos);
+    yPos += 15;
+    doc.text(`VAT: ${invoice.vatRate != null ? invoice.vatRate + '%' : '-'}`, 300, yPos);
+    yPos += 15;
+    doc.text(`Due date: ${formatDate(invoice.dueDate) || '-'}`, 300, yPos);
+
+    // Table header
+    yPos = 250;
+    doc.fontSize(10).font('Helvetica-Bold');
+    doc.fillColor('black');
+    // Draw header background
+    doc.rect(50, yPos - 5, 500, 20).fillAndStroke([243, 244, 246], [229, 231, 235]);
+    doc.text('#', 50, yPos);
+    doc.text('Product', 80, yPos);
+    doc.text('Quantity', 300, yPos);
+    doc.text('Unit Price', 360, yPos);
+    doc.text('Total', 450, yPos, { width: 100, align: 'right' });
+
+    // Draw line under header
+    doc.moveTo(50, yPos + 15).lineTo(550, yPos + 15).stroke();
+
+    // Table rows
+    yPos += 25;
+    doc.font('Helvetica');
+    if (invoice.details && invoice.details.length > 0) {
+      invoice.details.forEach((detail, index) => {
+        if (yPos > 650) {
+          doc.addPage();
+          yPos = 50;
+        }
+
+        // Alternate row background
+        if (index % 2 === 0) {
+          doc.rect(50, yPos - 3, 500, 18).fill([255, 255, 255]);
+        } else {
+          doc.rect(50, yPos - 3, 500, 18).fill([249, 250, 251]);
+        }
+
+        doc.fontSize(9).fillColor('black');
+        doc.text(String(index + 1), 50, yPos);
+        doc.text(detail.productName || detail.product?.name || 'N/A', 80, yPos, { width: 200 });
+        doc.text(String(detail.quantity || 0), 300, yPos);
+        doc.text(formatCurrency(detail.unitPrice || 0, invoice.currency), 360, yPos, { width: 80, align: 'right' });
+        doc.text(formatCurrency(detail.totalPrice || 0, invoice.currency), 450, yPos, { width: 100, align: 'right' });
+        
+        // Draw row border
+        doc.moveTo(50, yPos + 15).lineTo(550, yPos + 15).stroke([229, 231, 235]);
+        yPos += 20;
+      });
+    } else {
+      doc.fontSize(9).text('No products', 50, yPos);
+      yPos += 20;
+    }
+
+    // Summary section - Right aligned box similar to modal
+    yPos = Math.max(yPos + 30, 600);
+    const summaryBoxX = 300;
+    const summaryBoxY = yPos - 10;
+    const summaryBoxWidth = 250;
+    const summaryBoxHeight = 80;
+    
+    // Draw summary box background
+    doc.rect(summaryBoxX, summaryBoxY, summaryBoxWidth, summaryBoxHeight).fillAndStroke([249, 250, 251], [229, 231, 235]);
+    
+    yPos = summaryBoxY + 15;
+    doc.fontSize(10).font('Helvetica');
+    doc.text('Subtotal', summaryBoxX + 10, yPos);
+    doc.text(formatCurrency(invoice.totalAmount || 0, invoice.currency || 'VND'), summaryBoxX + summaryBoxWidth - 10, yPos, { width: 100, align: 'right' });
+    yPos += 15;
+
+    doc.text(`VAT (${invoice.vatRate || 0}%)`, summaryBoxX + 10, yPos);
+    doc.text(formatCurrency(invoice.vatAmount || 0, invoice.currency || 'VND'), summaryBoxX + summaryBoxWidth - 10, yPos, { width: 100, align: 'right' });
+    yPos += 20;
+
+    doc.font('Helvetica-Bold').fontSize(12);
+    doc.text('Total:', summaryBoxX + 10, yPos);
+    doc.text(formatCurrency(invoice.finalAmount || 0, invoice.currency || 'VND'), summaryBoxX + summaryBoxWidth - 10, yPos, { width: 100, align: 'right' });
+
+    // Notes section
+    if (invoice.note) {
+      yPos = summaryBoxY + summaryBoxHeight + 20;
+      // Draw note box
+      const noteBoxHeight = 50;
+      doc.rect(50, yPos - 5, 500, noteBoxHeight).fillAndStroke([255, 255, 255], [229, 231, 235]);
+      doc.fontSize(10).font('Helvetica-Bold').text('Note', 50, yPos);
+      yPos += 15;
+      doc.fontSize(9).font('Helvetica');
+      doc.text(invoice.note, 50, yPos, { width: 500 });
+    }
+
+    // Review History section
+    if (invoice.accounterReview?.reviewedBy) {
+      yPos = (invoice.note ? yPos + 40 : summaryBoxY + summaryBoxHeight + 20);
+      doc.fontSize(11).font('Helvetica-Bold').text('Review History', 50, yPos);
+      yPos += 20;
+      
+      // Draw review box with green background
+      const reviewBoxHeight = 60;
+      doc.rect(50, yPos - 5, 500, reviewBoxHeight).fillAndStroke([220, 252, 231], [187, 247, 208]);
+      
+      doc.fontSize(9).font('Helvetica');
+      const reviewedByName = invoice.accounterReview.reviewedBy?.accounter?.fullName || 
+                            invoice.accounterReview.reviewedBy?.fullName || 
+                            'N/A';
+      doc.text(`Reviewed by: ${reviewedByName}`, 50, yPos);
+      yPos += 12;
+      
+      const reviewedAt = invoice.accounterReview.reviewedAt ? 
+                        new Date(invoice.accounterReview.reviewedAt).toLocaleString('vi-VN') : 
+                        'N/A';
+      doc.text(`Reviewed at: ${reviewedAt}`, 50, yPos);
+      
+      if (invoice.accounterReview.comment) {
+        yPos += 12;
+        doc.text(`Comment: ${invoice.accounterReview.comment}`, 50, yPos, { width: 500 });
+      }
+    }
+
+    // Footer
+    const pageHeight = doc.page.height;
+    doc.fontSize(8).font('Helvetica').text(
+      `Xuất ngày: ${new Date().toLocaleDateString('vi-VN')} ${new Date().toLocaleTimeString('vi-VN')}`,
+      50,
+      pageHeight - 50,
+      { align: 'center' }
+    );
+
+    // Finalize PDF - ensure it's properly closed
+    doc.end();
+
+    // Handle response end
+    res.on('finish', () => {
+      console.log('PDF sent successfully for invoice:', invoice.invoiceNumber);
+    });
+
+    // Handle PDF stream end
+    doc.on('end', () => {
+      console.log('PDF generation completed for invoice:', invoice.invoiceNumber);
+    });
+
+  } catch (error) {
+    console.error("Error exporting invoice as PDF:", error);
+    // If headers not sent, send error response
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Error generating PDF: " + (error.message || "Unknown error")
+      });
+    }
+    // If headers already sent, just log the error
+    next(error);
+  }
+};
+
 module.exports = {
   createInvoiceFromExport,
   createInvoiceFromExportForce,
@@ -1322,5 +1660,6 @@ module.exports = {
   updateInvoice,
   deleteInvoice,
   dashboard,
-  getTotalRevenue
+  getTotalRevenue,
+  exportInvoiceAsPDF
 };

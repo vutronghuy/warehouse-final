@@ -119,6 +119,15 @@ supplierSchema.virtual('productsCount', {
 
 // Methods - Rating methods removed
 
+// Query middleware to exclude soft-deleted records by default
+supplierSchema.pre(/^find/, function (next) {
+  // Only exclude deleted records if deletedAt is not explicitly queried
+  if (this.getQuery().deletedAt === undefined) {
+    this.where({ deletedAt: null });
+  }
+  next();
+});
+
 // Static methods
 supplierSchema.statics.getActiveSuppliers = function() {
   return this.find({ status: 'cooperation', deletedAt: null })

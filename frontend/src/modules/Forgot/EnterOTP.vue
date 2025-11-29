@@ -51,9 +51,9 @@
               </svg>
             </div>
             <div class="text-center sm:text-left">
-              <h2 class="text-2xl text-center font-semibold text-white">Nhập mã xác nhận</h2>
+              <h2 class="text-2xl text-center font-semibold text-white">Enter the confirmation code</h2>
               <p class="text-sm text-center text-white/80 mt-2">
-                Mã xác minh đã được gửi tới
+                Verification code has been sent to
                 <span class="font-semibold">{{ email }}</span>
               </p>
             </div>
@@ -81,17 +81,17 @@
           <div class="text-center text-white/90">
             <p class="text-sm">
               <span v-if="timeLeft > 0">
-                Vui lòng chờ <span class="font-semibold">{{ timeLeft }}s</span> để gửi lại.
+                Please wait <span class="font-semibold">{{ timeLeft }}s</span> to send back.
               </span>
               <span v-else class="inline-flex items-center gap-1">
-                Không nhận được mã?
+                Didn't receive code?
                 <button
                   type="button"
                   @click="resendCode"
                   :disabled="isLoading || timeLeft > 0"
                   class="text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer bg-transparent border-0 p-0 underline-offset-2 cursor-pointer"
                 >
-                  Gửi lại
+                Resend
                 </button>
               </span>
             </p>

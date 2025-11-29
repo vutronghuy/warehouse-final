@@ -51,7 +51,7 @@ export class BaseClient {
     removeAppToken();
 
     if (this.withActionLogout) {
-      window.location.href = `/login?returnUrl=${encodeURIComponent(
+      window.location.href = `/login?redirect=${encodeURIComponent(
         window.location.href.replace(window.location.origin, ''),
       )}`;
     }
@@ -64,37 +64,70 @@ export class BaseClient {
       return res;
     }
 
+    // Đảm bảo res.data tồn tại và là object
+    if (!res || !res.data) {
+      return {
+        success: false,
+        error: true,
+        data: null,
+        statusCode: res?.status || 500,
+        message: 'Invalid response format',
+        rawResponse: res,
+      };
+    }
+
     const resData = res.data || {};
     const success = !!resData.success;
     return {
       success,
       error: !success,
-      data: resData.data,
+      data: resData?.data || null,
       statusCode: res?.status,
-      message: resData.message,
+      message: resData?.message || '',
       rawResponse: res,
     };
   }
 
   private transformError(error: AxiosError<any, any>): IResponse {
     const res = error.response;
-    const resData = res?.data || {};
+
+    // Đảm bảo resData luôn là object hợp lệ
+    let resData = {};
+    if (res?.data) {
+      try {
+        resData = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+      } catch (e) {
+        resData = { message: res.data };
+      }
+    }
+
+    // Đảm bảo payload luôn tồn tại
+    const payload = resData?.data || resData?.payload || null;
+
     return {
       success: false,
       error: true,
-      data: resData.data,
+      data: payload,
       statusCode: res?.status || error.code,
-      message: resData.message || error.message,
+      message: resData?.message || error.message || 'An error occurred',
       rawResponse: res,
     };
   }
 
   create({ setAuthorizationFn }: ConfigInstance = {}) {
     const defaultSetAuthorizationFn = (config) => {
-      const token = getAppAccessToken();
+      // Try to get token from multiple sources
+      let token = getAppAccessToken();
+
+      // Fallback to 'token' key (used by login system)
+      if (!token) {
+        token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      }
 
       if (token) {
         config.headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        console.warn('⚠️ No token found for API request:', config.url);
       }
     };
 
@@ -125,9 +158,22 @@ export class BaseClient {
 
     api.interceptors.response.use(
       (response: AxiosResponse): any => {
-        response.data = jsonDecode(response.data);
-        if (isNotifyWhenFail(response)) {
-          message.error(response.data?.message);
+        try {
+          // Đảm bảo response.data tồn tại trước khi parse
+          if (response && response.data !== undefined) {
+            const decoded = jsonDecode(response.data);
+            response.data = decoded !== null ? decoded : response.data;
+          }
+
+          if (isNotifyWhenFail(response) && response.data?.message) {
+            message.error(response.data.message);
+          }
+        } catch (e) {
+          console.warn('Error parsing response data:', e);
+          // Đảm bảo response.data luôn có giá trị hợp lệ
+          if (!response.data) {
+            response.data = {};
+          }
         }
 
         return this.transformResponse(response);
@@ -136,10 +182,38 @@ export class BaseClient {
         const originalRequest: any = error.config;
         const statusCode: any = error?.response?.status;
         const errorResponse: any = error?.response || {};
-        errorResponse.data = jsonDecode(errorResponse.data);
+
+        try {
+          // Đảm bảo errorResponse.data tồn tại trước khi parse
+          if (errorResponse.data !== undefined) {
+            const decoded = jsonDecode(errorResponse.data);
+            errorResponse.data = decoded !== null ? decoded : (errorResponse.data || {});
+          } else {
+            errorResponse.data = {};
+          }
+        } catch (e) {
+          console.warn('Error parsing error response data:', e);
+          errorResponse.data = errorResponse.data || {};
+        }
+
+        // Không hiển thị thông báo cho 429 (rate limit)
+        if (statusCode === 429) {
+          // 静默处理 429 错误，返回一个标记为静默的错误
+          const silentError = {
+            ...error,
+            silent: true,
+            response: {
+              ...error.response,
+              status: 429,
+              data: errorResponse.data || {}
+            }
+          };
+          return Promise.reject(silentError);
+        }
 
         if (isNotifyWhenFail(errorResponse) && [422, 400, 403, 402].includes(statusCode)) {
-          message.error(errorResponse.data?.message);
+          const errorMessage = errorResponse.data?.message || 'An error occurred';
+          message.error(errorMessage);
         }
 
         if (!this.withActionRefresh) {
