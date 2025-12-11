@@ -1,7 +1,7 @@
 // controllers/chatController.js
 const fs = require('fs');
 const path = require('path');
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
 require('dotenv').config();
 const { generateFromGemini } = require('../utils/geminiClient');
 
@@ -102,6 +102,56 @@ function needsFinanceSummary(question) {
   return FINANCE_KEYWORDS.some((keyword) => normalized.includes(keyword));
 }
 
+function detectTimePeriod(question) {
+  const normalized = (question || '').toString().toLowerCase();
+  if (!normalized) return null;
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  // Detect "this month" / "tháng này" / "current month"
+  const thisMonthKeywords = [
+    'this month',
+    'tháng này',
+    'current month',
+    'tháng hiện tại',
+    'month này'
+  ];
+  
+  if (thisMonthKeywords.some(keyword => normalized.includes(keyword))) {
+    return { year: currentYear, month: currentMonth };
+  }
+
+  // Detect "last month" / "tháng trước" / "previous month"
+  const lastMonthKeywords = [
+    'last month',
+    'tháng trước',
+    'previous month',
+    'tháng vừa rồi'
+  ];
+  
+  if (lastMonthKeywords.some(keyword => normalized.includes(keyword))) {
+    const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const lastYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    return { year: lastYear, month: lastMonth };
+  }
+
+  // Try to extract year and month from question (e.g., "revenue in 2024-01", "doanh thu tháng 1/2024")
+  const yearMatch = normalized.match(/\b(20\d{2})\b/);
+  const monthMatch = normalized.match(/\b(0?[1-9]|1[0-2])\b/);
+  
+  if (yearMatch && monthMatch) {
+    const year = parseInt(yearMatch[1], 10);
+    const month = parseInt(monthMatch[1], 10);
+    if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {
+      return { year, month };
+    }
+  }
+
+  return null;
+}
+
 function sanitizeFilter(filter) {
   if (Array.isArray(filter)) {
     return filter.map((item) => (typeof item === 'object' ? sanitizeFilter(item) : item));
@@ -174,28 +224,91 @@ function buildFallbackSummary(datasets) {
     .join('\n\n');
 }
 
-async function buildFinanceSummary(db) {
+function buildMonthRange(y, m) {
+  const year = Number(y);
+  const month = Number(m);
+  if (!year || !month || month < 1 || month > 12) return null;
+  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  return { start, end };
+}
+
+async function buildFinanceSummary(db, options = {}) {
   try {
+    const { warehouseId, year, month } = options;
+
     const invoicesCollection = db.collection('invoices');
     const importCollection = db.collection('importreceipts');
-    const invoiceMatch = {
+    const baseInvoiceMatch = {
       status: { $in: ['approved', 'paid'] },
       deletedAt: { $in: [null] }
     };
-    const importMatch = { deletedAt: { $in: [null] } };
+    const baseImportMatch = { deletedAt: { $in: [null] } };
+
+    // Optional warehouse filter
+    if (warehouseId && ObjectId.isValid(String(warehouseId))) {
+      const wid = new ObjectId(String(warehouseId));
+      baseInvoiceMatch.warehouseId = wid;
+      baseImportMatch.warehouseId = wid;
+    }
+
+    // Optional month filter for current period
+    let currentRange = null;
+    if (year && month) {
+      currentRange = buildMonthRange(year, month);
+    }
+
+    let prevRange = null;
+    if (currentRange) {
+      const prevMonth = month === 1 ? 12 : Number(month) - 1;
+      const prevYear = month === 1 ? Number(year) - 1 : Number(year);
+      prevRange = buildMonthRange(prevYear, prevMonth);
+    }
+
+    const invoiceMatchAll = { ...baseInvoiceMatch };
+    const invoiceMatchCurrent = currentRange
+      ? { ...baseInvoiceMatch, createdAt: { $gte: currentRange.start, $lte: currentRange.end } }
+      : null;
+    const invoiceMatchPrev = prevRange
+      ? { ...baseInvoiceMatch, createdAt: { $gte: prevRange.start, $lte: prevRange.end } }
+      : null;
+
+    const importMatchAll = { ...baseImportMatch };
+    const importMatchCurrent = currentRange
+      ? { ...baseImportMatch, createdAt: { $gte: currentRange.start, $lte: currentRange.end } }
+      : null;
+
+    const EUR_TO_VND_RATE = Number(process.env.EUR_TO_VND_RATE) || 28500;
 
     const [revenueAgg, costAgg, invoiceCount, importCount] = await Promise.all([
       invoicesCollection.aggregate([
-        { $match: invoiceMatch },
+        { $match: invoiceMatchAll },
+        {
+          $addFields: {
+            finalAmountVND: {
+              $cond: [
+                { $eq: ['$currency', 'USD'] },
+                { $multiply: [{ $ifNull: ['$finalAmount', 0] }, USD_TO_VND_RATE] },
+                {
+                  $cond: [
+                    { $eq: ['$currency', 'EUR'] },
+                    { $multiply: [{ $ifNull: ['$finalAmount', 0] }, EUR_TO_VND_RATE] },
+                    { $ifNull: ['$finalAmount', 0] } // VND
+                  ]
+                }
+              ]
+            }
+          }
+        },
         {
           $group: {
             _id: null,
-            totalRevenue: { $sum: { $ifNull: ['$finalAmount', 0] } }
+            totalRevenue: { $sum: '$finalAmountVND' }
           }
         }
       ]).toArray(),
       importCollection.aggregate([
-        { $match: importMatch },
+        { $match: importMatchAll },
         { $unwind: '$details' },
         {
           $group: {
@@ -211,8 +324,8 @@ async function buildFinanceSummary(db) {
           }
         }
       ]).toArray(),
-      invoicesCollection.countDocuments(invoiceMatch),
-      importCollection.countDocuments(importMatch)
+      invoicesCollection.countDocuments(invoiceMatchAll),
+      importCollection.countDocuments(importMatchAll)
     ]);
 
     const totalRevenue = revenueAgg[0]?.totalRevenue || 0;
@@ -220,6 +333,75 @@ async function buildFinanceSummary(db) {
     const totalCostVND = totalCostUSD * USD_TO_VND_RATE;
     const profitVND = totalRevenue - totalCostVND;
     const profitMargin = totalRevenue > 0 ? profitVND / totalRevenue : 0;
+
+    let revenueCurrent = null;
+    let revenuePrev = null;
+
+    if (invoiceMatchCurrent) {
+      const curAgg = await invoicesCollection.aggregate([
+        { $match: invoiceMatchCurrent },
+        {
+          $addFields: {
+            finalAmountVND: {
+              $cond: [
+                { $eq: ['$currency', 'USD'] },
+                { $multiply: [{ $ifNull: ['$finalAmount', 0] }, USD_TO_VND_RATE] },
+                {
+                  $cond: [
+                    { $eq: ['$currency', 'EUR'] },
+                    { $multiply: [{ $ifNull: ['$finalAmount', 0] }, EUR_TO_VND_RATE] },
+                    { $ifNull: ['$finalAmount', 0] } // VND
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$finalAmountVND' }
+          }
+        }
+      ]).toArray();
+      revenueCurrent = curAgg[0]?.totalRevenue || 0;
+    }
+
+    if (invoiceMatchPrev) {
+      const prevAgg = await invoicesCollection.aggregate([
+        { $match: invoiceMatchPrev },
+        {
+          $addFields: {
+            finalAmountVND: {
+              $cond: [
+                { $eq: ['$currency', 'USD'] },
+                { $multiply: [{ $ifNull: ['$finalAmount', 0] }, USD_TO_VND_RATE] },
+                {
+                  $cond: [
+                    { $eq: ['$currency', 'EUR'] },
+                    { $multiply: [{ $ifNull: ['$finalAmount', 0] }, EUR_TO_VND_RATE] },
+                    { $ifNull: ['$finalAmount', 0] } // VND
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$finalAmountVND' }
+          }
+        }
+      ]).toArray();
+      revenuePrev = prevAgg[0]?.totalRevenue || 0;
+    }
+
+    const diffValue = revenueCurrent !== null && revenuePrev !== null ? revenueCurrent - revenuePrev : null;
+    const diffPercent =
+      revenueCurrent !== null && revenuePrev !== null && revenuePrev !== 0
+        ? (diffValue / revenuePrev)
+        : null;
 
     return {
       totalRevenueVND: totalRevenue,
@@ -230,7 +412,14 @@ async function buildFinanceSummary(db) {
       profitMargin,
       invoiceCount,
       importReceiptCount: importCount,
-      notes: 'Revenue = sum(invoice.finalAmount) for approved/paid; Cost = sum(import unitPrice*quantity, converted to VND); Profit = Revenue - Cost.'
+      revenueCurrent,
+      revenuePrev,
+      revenueDiffValue: diffValue,
+      revenueDiffPercent: diffPercent,
+      period: currentRange
+        ? { year: Number(year), month: Number(month), prevYear: prevRange ? prevRange.start.getFullYear() : null, prevMonth: prevRange ? prevRange.start.getMonth() + 1 : null }
+        : null,
+      notes: 'Revenue = sum(invoice.finalAmount) for approved/paid; Cost = sum(import unitPrice*quantity, converted to VND); Profit = Revenue - Cost. Optional warehouse/month filters applied when provided.'
     };
   } catch (err) {
     console.error('Failed to build finance summary:', err.message);
@@ -254,7 +443,7 @@ async function chatController(req, res) {
     await initMongoClient();
     const db = client.db(DB_NAME);
 
-    const { question, collection, collections, limit, filters } = req.body;
+    const { question, collection, collections, limit, filters, warehouseId, year, month } = req.body;
 
     if (!question) {
       return res.status(400).json({ error: 'Missing question' });
@@ -318,7 +507,23 @@ async function chatController(req, res) {
     }
 
     if (financeRequested) {
-      const financeSummary = await buildFinanceSummary(db);
+      // Auto-detect time period from question if not provided
+      let finalYear = year;
+      let finalMonth = month;
+      
+      if (!finalYear || !finalMonth) {
+        const detectedPeriod = detectTimePeriod(question);
+        if (detectedPeriod) {
+          finalYear = detectedPeriod.year;
+          finalMonth = detectedPeriod.month;
+        }
+      }
+      
+      const financeSummary = await buildFinanceSummary(db, { 
+        warehouseId, 
+        year: finalYear, 
+        month: finalMonth 
+      });
       if (financeSummary) {
         datasets.push({ collection: '__finance_summary', documents: [financeSummary] });
       }
