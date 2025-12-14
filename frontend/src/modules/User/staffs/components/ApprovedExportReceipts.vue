@@ -70,7 +70,7 @@
                   <span v-else class="text-gray-400">○</span>
                   {{ receipt.receiptNumber }}
                 </div>
-                <span v-if="hasInvoice(receipt._id)" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span v-if="hasInvoice(receipt._id)" class="-inlineflex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                   Invoice Created
                 </span>
               </div>

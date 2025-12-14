@@ -50,11 +50,45 @@
                 </option>
               </select>
             </div>
+
+            <!-- Batch Filter -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Batch</label>
+              <div class="flex items-center space-x-2">
+                <button
+                  @click="showBatchFilter = !showBatchFilter"
+                  class="px-3 py-2 text-xs border rounded-md text-gray-700 hover:bg-gray-100"
+                  type="button"
+                >
+                  ▸ Batch
+                </button>
+                <select
+                  v-if="showBatchFilter"
+                  v-model="selectedBatchFilter"
+                  class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All batches</option>
+                  <option v-for="b in uniqueBatches" :key="b" :value="b">{{ b || '—' }}</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <!-- Bulk Update Min Stock Form -->
-          <div class="bg-gray-50 rounded-lg p-4 mb-6">
-            <h3 class="text-md font-medium text-gray-900 mb-4">Bulk Update Min Stock Level</h3>
+          <div class="mb-6">
+            <div class="flex items-center mb-3">
+              <input
+                type="checkbox"
+                v-model="showMinStockForm"
+                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"
+                id="showMinStockForm"
+              />
+              <label for="showMinStockForm" class="text-sm font-medium text-gray-700 cursor-pointer">
+                Show Bulk Update Min Stock Level Form
+              </label>
+            </div>
+            <div v-if="showMinStockForm" class="bg-gray-50 rounded-lg p-4">
+              <h3 class="text-md font-medium text-gray-900 mb-4">Bulk Update Min Stock Level</h3>
 
             <!-- Selected Products Info -->
             <div v-if="selectedProducts.length > 0" class="mb-4 p-3 bg-blue-50 rounded-lg">
@@ -95,27 +129,40 @@
               </div>
             </div>
 
-            <!-- Quick Selection Buttons -->
-            <div class="mt-4 flex flex-wrap gap-2">
-              <button
-                @click="selectAllVisible"
-                class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-              >
-                Select All Visible
-              </button>
+              <!-- Quick Selection Buttons -->
+              <div class="mt-4 flex flex-wrap gap-2">
+                <button
+                  @click="selectAllVisible"
+                  class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  Select All Visible
+                </button>
 
-              <button
-                @click="clearSelection"
-                class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-              >
-                Clear All
-              </button>
+                <button
+                  @click="clearSelection"
+                  class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  Clear All
+                </button>
+              </div>
             </div>
           </div>
 
           <!-- Bulk Update Price Markup Form -->
-          <div class="bg-green-50 rounded-lg p-4 mb-6">
-            <h3 class="text-md font-medium text-gray-900 mb-4">Bulk Update Price Markup</h3>
+          <div class="mb-6">
+            <div class="flex items-center mb-3">
+              <input
+                type="checkbox"
+                v-model="showPriceMarkupForm"
+                class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded mr-2"
+                id="showPriceMarkupForm"
+              />
+              <label for="showPriceMarkupForm" class="text-sm font-medium text-gray-700 cursor-pointer">
+                Show Bulk Update Price Markup Form
+              </label>
+            </div>
+            <div v-if="showPriceMarkupForm" class="bg-green-50 rounded-lg p-4">
+              <h3 class="text-md font-medium text-gray-900 mb-4">Bulk Update Price Markup</h3>
 
             <!-- Selected Products Info for Pricing -->
             <div v-if="selectedProducts.length > 0" class="mb-4 p-3 bg-green-100 rounded-lg">
@@ -158,6 +205,7 @@
                 </button>
               </div>
             </div>
+            </div>
           </div>
 
           <!-- Products Table -->
@@ -185,6 +233,9 @@
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Category
                   </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Batch
+                </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Quantity
                   </th>
@@ -236,6 +287,12 @@
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-gray-900">{{ product.categoryId?.name || 'N/A' }}</div>
                   </td>
+              <!-- Batch -->
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm font-medium text-gray-900">
+                  {{ product.productBatch || '—' }}
+                </div>
+              </td>
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-gray-900">{{ product.quantity || 0 }}</div>
                     <div class="text-xs text-gray-500">{{ product.unit }}</div>
@@ -338,6 +395,10 @@ export default {
       isUpdatingPricing: false, // Loading state for pricing updates
       currentPage: 1,
       pageSize: 10,
+      showBatchFilter: false,
+      selectedBatchFilter: '',
+      showMinStockForm: false,
+      showPriceMarkupForm: false,
       message: '',
       messageType: 'success',
       showUserMenu: false,
@@ -362,7 +423,16 @@ export default {
         );
       }
 
+      if (this.selectedBatchFilter) {
+        filtered = filtered.filter((product) => (product.productBatch || '') === this.selectedBatchFilter);
+      }
+
       return filtered;
+    },
+
+    uniqueBatches() {
+      const set = new Set(this.products.map((p) => p.productBatch || '').filter((b) => b.trim() !== ''));
+      return Array.from(set).sort();
     },
 
     totalPages() {
@@ -404,6 +474,9 @@ export default {
       this.currentPage = 1;
     },
     searchProduct() {
+      this.currentPage = 1;
+    },
+    selectedBatchFilter() {
       this.currentPage = 1;
     },
   },

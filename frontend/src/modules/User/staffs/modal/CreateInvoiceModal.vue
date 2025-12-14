@@ -390,12 +390,18 @@ function validate() {
 async function submit() {
   if (!validate()) return;
 
+  // Ensure we only use the current form values (last user input)
+  const currentVatRate = Number(localForm.vatRate);
+  const currentPaymentCondition = localForm.paymentCondition;
+  const currentCurrency = localForm.currency;
+  const currentNote = localForm.note;
+
   const payload = {
     exportReceiptId: props.selectedExport._id,
-    paymentCondition: localForm.paymentCondition,
-    currency: localForm.currency,
-    vatRate: Number(localForm.vatRate),
-    note: localForm.note,
+    paymentCondition: currentPaymentCondition,
+    currency: currentCurrency,
+    vatRate: currentVatRate, // Only use the current/last value
+    note: currentNote,
     // Optionally include line items if backend expects them
     items: (props.selectedExport.details || []).map((d) => ({
       productId: d.productId && typeof d.productId === 'object' ? d.productId._id ?? d.productId.id : d.productId,
@@ -407,6 +413,10 @@ async function submit() {
     vatAmount: vatAmountUSD.value,
     total: totalUSD.value,
   };
+
+  // Reset form BEFORE submission to prevent any race conditions
+  Object.assign(localForm, defaultForm());
+  Object.keys(fieldErrors).forEach(key => delete fieldErrors[key]);
 
   isSubmitting.value = true;
   try {

@@ -476,16 +476,16 @@ export default {
 
         if (response.data.success) {
           this.toast.success(
-            `Phiếu xuất đã được ${this.approvalAction === 'approve' ? 'duyệt' : 'từ chối'} thành công!`
+            `The export note has been issued ${this.approvalAction === 'approve' ? 'Approved' : 'Rejected'} Successfully!`
           );
           this.closeApprovalModal();
           this.fetchExportReceipts();
         } else {
-          this.toast.error(response.data.message || 'Thao tác thất bại');
+          this.toast.error(response.data.message || 'Ideals and failures');
         }
       } catch (error) {
         console.error('Error submitting approval:', error);
-        this.toast.error(error.response?.data?.message || 'Không thể gửi phê duyệt');
+        this.toast.error(error.response?.data?.message || 'Unable to submit approval');
       } finally {
         this.isSubmitting = false;
       }

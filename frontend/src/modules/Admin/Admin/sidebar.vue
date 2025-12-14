@@ -47,7 +47,7 @@
          <router-link
         to="/admin/dashboard"
         :class="[
-          'flex items-center px-4 py-3 mx-2 rounded-lg text-sm font-medium transition-all duration-200',
+          'flex items-center px-4 py-3 mx-2 rounded-lg text-sm font-medium transition-all duration-200 no-underline',
           $route.path === '/admin'
             ? 'bg-[#EDE7F6] text-[#6A4C93] shadow-sm'
             : 'text-[#8A7FAF] hover:bg-[#D8C9F1] hover:text-[#6A4C93]',

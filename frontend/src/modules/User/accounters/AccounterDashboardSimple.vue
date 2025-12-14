@@ -440,24 +440,6 @@ const fetchCashFlow = async () => {
         console.log('Cash Flow API failed or no data. Response:', cashFlowResponse.data);
       }
 
-      // Backup: If totalCost == 0, try total-import-cost API
-      if (totalCost === 0) {
-        try {
-          const importCostResponse = await axios.get('/api/reports/total-import-cost', {
-            params: {
-              ...getWarehouseQuery()
-            }
-          });
-          if (importCostResponse.data?.success && importCostResponse.data.totalCostVND) {
-            totalCost = importCostResponse.data.totalCostVND;
-          } else {
-            console.log('⚠️ Import cost API returned 0 or invalid data');
-          }
-        } catch (backupError) {
-          console.log('❌ Import cost API failed:', backupError);
-        }
-      }
-
       cashFlowSummary.value = {
         totalRevenue: totalRevenue,
         totalCost: totalCost,
@@ -1207,7 +1189,10 @@ onBeforeUnmount(() => {
 // Recalculate summary boxes from series based on current filters
 const updateSummaryFromSeries = () => {
   const period = chartFilters.value.period;
-  if (!cashFlowSeries.value || cashFlowSeries.value.length === 0) return;
+  if (!cashFlowSeries.value || cashFlowSeries.value.length === 0) {
+    cashFlowSummary.value = { totalRevenue: 0, totalCost: 0, totalProfit: 0 };
+    return;
+  }
 
   if (period === 'year') {
     const selectedYear = Number(chartFilters.value.year);

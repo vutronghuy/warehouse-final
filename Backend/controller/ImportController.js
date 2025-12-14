@@ -183,7 +183,7 @@ exports.getImportReceiptById = async (req, res, next) => {
       .populate('createdByStaff', 'staff.fullName')
       .populate('supplierId', 'name contactInfo')
       .populate('warehouseId', 'name location')
-      .populate('details.productId', 'name sku unit basePrice finalPrice')
+      .populate('details.productId', 'name sku unit basePrice finalPrice productBatch')
       .populate('details.supplierId', 'name contactInfo')
       .lean();
 

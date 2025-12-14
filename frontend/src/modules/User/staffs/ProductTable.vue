@@ -74,6 +74,27 @@
             </option>
           </select>
         </div>
+
+        <!-- Batch Filter -->
+        <div>
+          <div class="flex items-center space-x-2">
+            <button
+              @click="showBatchFilter = !showBatchFilter"
+              class="px-3 py-2 text-xs border rounded-md text-gray-700 hover:bg-gray-100"
+              type="button"
+            >
+              ▸ Batch
+            </button>
+            <select
+              v-if="showBatchFilter"
+              v-model="selectedBatchFilter"
+              class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All batches</option>
+              <option v-for="b in uniqueBatches" :key="b" :value="b">{{ b || '—' }}</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -104,6 +125,9 @@
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Price
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Batch
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Quantity
@@ -156,6 +180,13 @@
               </div>
               <div class="text-xs text-gray-500">
                 Unit: {{ product.unit || 'N/A' }}
+              </div>
+            </td>
+
+            <!-- Batch -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-medium text-gray-900">
+                {{ product.productBatch || '—' }}
               </div>
             </td>
 
@@ -287,9 +318,11 @@ export default {
       search: '',
       statusFilter: '',
       categoryFilter: '',
+      showBatchFilter: false,
+      selectedBatchFilter: '',
       currentPage: 1,
       pageSize: 10, // 10 products per page
-      loadMessage: '' // Message to show after loading
+      loadMessage: '', // Message to show after loading
     };
   },
   computed: {
@@ -316,7 +349,17 @@ export default {
         filtered = filtered.filter(product => product.categoryId?._id === this.categoryFilter);
       }
 
+      // Batch filter
+      if (this.selectedBatchFilter) {
+        filtered = filtered.filter((product) => (product.productBatch || '') === this.selectedBatchFilter);
+      }
+
       return filtered;
+    },
+
+    uniqueBatches() {
+      const set = new Set(this.products.map((p) => p.productBatch || '').filter((b) => b.trim() !== ''));
+      return Array.from(set).sort();
     },
 
     totalPages() {
@@ -381,6 +424,9 @@ export default {
       this.currentPage = 1;
     },
     categoryFilter() {
+      this.currentPage = 1;
+    },
+    selectedBatchFilter() {
       this.currentPage = 1;
     }
   },

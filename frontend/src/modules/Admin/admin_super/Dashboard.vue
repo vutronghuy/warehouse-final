@@ -279,6 +279,26 @@ export default {
     await this.loadRevenueByWarehouse();
   },
   methods: {
+    async _sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    },
+    async _getWithRetry(url, config = {}, retries = 2, delayMs = 600) {
+      let lastError;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          return await axios.get(url, config);
+        } catch (err) {
+          lastError = err;
+          const status = err?.response?.status;
+          if (status === 429 && attempt < retries) {
+            await this._sleep(delayMs * (attempt + 1));
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw lastError;
+    },
     _loadUserFromStorage() {
       try {
         const raw = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -319,7 +339,7 @@ export default {
     // ---------- Load data for charts ----------
     async loadWarehouses() {
       try {
-        const res = await axios.get('/api/warehouses/active');
+        const res = await this._getWithRetry('/api/warehouses/active', {}, 2, 800);
         if (res.data && res.data.success !== false) {
           this.warehouses = res.data.warehouses || res.data.data || [];
         }
@@ -370,7 +390,7 @@ export default {
         if (this.cashFlowFilter.period === 'day') {
           params.month = this.cashFlowFilter.month;
         }
-        const res = await axios.get('/api/reports/cash-flow-time-series', { params });
+        const res = await this._getWithRetry('/api/reports/cash-flow-time-series', { params }, 2, 800);
         if (res.data && res.data.success) {
           this.cashFlowSeries = res.data.data?.series || [];
         } else {

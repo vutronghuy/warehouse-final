@@ -320,7 +320,11 @@ exports.getCashFlow = async (req, res, next) => {
 
     // Nếu period = 'all', lấy tất cả dữ liệu
     if (period === 'all') {
-      // Lấy tổng doanh thu từ tất cả Invoice
+      // Exchange rates
+      const USD_TO_VND_RATE = Number(process.env.USD_TO_VND_RATE) || 26401;
+      const EUR_TO_VND_RATE = Number(process.env.EUR_TO_VND_RATE) || 28500;
+
+      // Lấy tổng doanh thu từ tất cả Invoice (convert về VND)
       const totalRevenueResult = await Invoice.aggregate([
         {
           $match: {
@@ -330,9 +334,26 @@ exports.getCashFlow = async (req, res, next) => {
           }
         },
         {
+          $addFields: {
+            finalAmountVND: {
+              $cond: [
+                { $eq: ['$currency', 'USD'] },
+                { $multiply: ['$finalAmount', USD_TO_VND_RATE] },
+                {
+                  $cond: [
+                    { $eq: ['$currency', 'EUR'] },
+                    { $multiply: ['$finalAmount', EUR_TO_VND_RATE] },
+                    '$finalAmount' // VND
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
           $group: {
             _id: null,
-            totalRevenue: { $sum: '$finalAmount' }
+            totalRevenue: { $sum: '$finalAmountVND' }
           }
         }
       ]);
@@ -363,9 +384,6 @@ exports.getCashFlow = async (req, res, next) => {
           }
         }
       ]);
-
-      // USD to VND exchange rate
-      const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
 
       const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].totalRevenue : 0;
       const totalCostUSD = totalCostResult.length > 0 ? totalCostResult[0].totalCostUSD : 0;
@@ -402,6 +420,9 @@ exports.getCashFlow = async (req, res, next) => {
     }
 
     // Lấy dữ liệu doanh thu từ Invoice
+    const USD_TO_VND_RATE = Number(process.env.USD_TO_VND_RATE) || 26401;
+    const EUR_TO_VND_RATE = Number(process.env.EUR_TO_VND_RATE) || 28500;
+
     const revenueData = await Promise.all(
       monthsData.map(async ({ year: y, month: m }) => {
         const start = new Date(y, m - 1, 1);
@@ -417,9 +438,26 @@ exports.getCashFlow = async (req, res, next) => {
             }
           },
           {
+            $addFields: {
+              finalAmountVND: {
+                $cond: [
+                  { $eq: ['$currency', 'USD'] },
+                  { $multiply: ['$finalAmount', USD_TO_VND_RATE] },
+                  {
+                    $cond: [
+                      { $eq: ['$currency', 'EUR'] },
+                      { $multiply: ['$finalAmount', EUR_TO_VND_RATE] },
+                      '$finalAmount' // VND
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
             $group: {
               _id: null,
-              totalRevenue: { $sum: '$finalAmount' }
+              totalRevenue: { $sum: '$finalAmountVND' }
             }
           }
         ]);
@@ -433,7 +471,6 @@ exports.getCashFlow = async (req, res, next) => {
     );
 
     // Lấy dữ liệu chi phí từ ImportReceipt được tạo trong tháng đó
-    const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
     const ImportReceipt = require('../models/import/ImportReceipt');
 
     const costData = await Promise.all(
@@ -751,13 +788,34 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       deletedAt: null
     };
 
+    // Exchange rates (using different variable names to avoid redeclaration)
+    const USD_VND_RATE = Number(process.env.USD_TO_VND_RATE) || 26401;
+    const EUR_VND_RATE = Number(process.env.EUR_TO_VND_RATE) || 28500;
+
     // Revenue data
     const revenueData = await Invoice.aggregate([
       { $match: invoiceMatchBase },
       {
+        $addFields: {
+          finalAmountVND: {
+            $cond: [
+              { $eq: ['$currency', 'USD'] },
+              { $multiply: ['$finalAmount', USD_VND_RATE] },
+              {
+                $cond: [
+                  { $eq: ['$currency', 'EUR'] },
+                  { $multiply: ['$finalAmount', EUR_VND_RATE] },
+                  '$finalAmount' // VND
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
         $group: {
           _id: groupBy,
-          totalRevenue: { $sum: '$finalAmount' }
+          totalRevenue: { $sum: '$finalAmountVND' }
         }
       },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
@@ -840,14 +898,13 @@ exports.getCashFlowTimeSeries = async (req, res, next) => {
       revenueMap.set(key, item.totalRevenue);
     });
 
-    const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
     costData.forEach(item => {
       const key = period === 'year' ?
         `${item._id.year}` :
         period === 'month' ?
         `${item._id.year}-${item._id.month}` :
         `${item._id.year}-${item._id.month}-${item._id.day}`;
-      const costVND = (item.totalCostUSD || 0) * USD_TO_VND_RATE;
+      const costVND = (item.totalCostUSD || 0) * USD_VND_RATE;
       costMap.set(key, costVND);
     });
 

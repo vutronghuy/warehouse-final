@@ -106,6 +106,15 @@ router.get('/', disableCache, verifyToken, requireStaffOrAbove, productControlle
 // GET /api/products/active - Get active products for dropdown
 router.get('/active', disableCache, verifyToken, productController.getActiveProducts);
 
+// GET /api/products/ending-inventory?month=MM&year=YYYY - Ending inventory theo tháng (dùng transaction logs)
+router.get(
+  '/ending-inventory',
+  disableCache,
+  verifyToken,
+  requireStaffOrAbove,
+  productController.getEndingInventoryByMonth
+);
+
 // GET /api/products/stats - Get product statistics
 router.get('/stats', disableCache, verifyToken, requireAdminOrSuperAdmin, productController.getProductStats);
 

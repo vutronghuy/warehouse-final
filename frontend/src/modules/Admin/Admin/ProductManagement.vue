@@ -49,6 +49,34 @@
               </select>
             </div>
 
+            <!-- Month Filter -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Month</label>
+              <select
+                v-model="selectedMonth"
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All</option>
+                <option v-for="m in 12" :key="m" :value="String(m).padStart(2, '0')">
+                  {{ String(m).padStart(2, '0') }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Year Filter -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Year</label>
+              <select
+                v-model="selectedYear"
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All</option>
+                <option v-for="y in yearOptions" :key="y" :value="String(y)">
+                  {{ y }}
+                </option>
+              </select>
+            </div>
+
             <!-- Quick Status Change Actions -->
             <div v-if="statusChangeProducts.length > 0">
               <label class="block text-sm font-medium text-gray-700 mb-2">Quick Status Change</label>
@@ -91,6 +119,23 @@
               <div class="text-sm text-gray-500">
                 {{ filteredProducts.length }} product{{ filteredProducts.length !== 1 ? 's' : '' }}
               </div>
+              <div class="flex items-center space-x-2">
+                <button
+                  @click="showBatchFilter = !showBatchFilter"
+                  class="px-3 py-1 text-xs border rounded-md text-gray-700 hover:bg-gray-100"
+                  type="button"
+                >
+                  ▸ Batch
+                </button>
+                <select
+                  v-if="showBatchFilter"
+                  v-model="selectedBatchFilter"
+                  class="px-2 py-1 text-xs border rounded-md"
+                >
+                  <option value="">All batches</option>
+                  <option v-for="b in uniqueBatches" :key="b" :value="b">{{ b || '—' }}</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -119,7 +164,16 @@
                     Warehouse
                   </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Batch
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Base Price
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Current Quantity
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ending Inventory
                   </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Min Stock Level
@@ -171,10 +225,32 @@
                     <div class="text-sm text-gray-500">{{ product.warehouseId?.location || '' }}</div>
                   </td>
 
+                  <!-- Batch -->
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">
+                      {{ product.productBatch || '—' }}
+                    </div>
+                  </td>
+
+                  <!-- Base Price -->
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">
+                      {{ product.basePrice ? product.basePrice.toLocaleString() : '0' }}
+                    </div>
+                  </td>
+
                   <!-- Current Quantity -->
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm font-medium text-gray-900">{{ product.quantity || 0 }}</div>
                     <div class="text-xs text-gray-500">{{ product.unit }}</div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">
+                      {{ formatEndingInventory(getEndingInventory(product._id)) }}
+                    </div>
+                    <div class="text-xs text-gray-500" v-if="selectedMonth && selectedYear">
+                      {{ selectedMonth }}/{{ selectedYear }}
+                    </div>
                   </td>
 
                   <!-- Min Stock Level -->
@@ -308,6 +384,12 @@ export default {
       statusFilter: '',
       categoryFilter: '',
       isLoading: false,
+      selectedMonth: String(new Date().getMonth() + 1).padStart(2, '0'),
+      selectedYear: String(new Date().getFullYear()),
+      endingInventoryMap: {},
+      yearOptions: [new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2],
+      showBatchFilter: false,
+      selectedBatchFilter: '',
       currentPage: 1,
       pageSize: 10,
       message: '',
@@ -337,7 +419,21 @@ export default {
         filtered = filtered.filter((product) => product.categoryId?._id === this.categoryFilter);
       }
 
+      if (this.selectedBatchFilter) {
+        filtered = filtered.filter((product) => (product.productBatch || '') === this.selectedBatchFilter);
+      }
+
       return filtered;
+    },
+
+    showEndingColumn() {
+      // Always show ending inventory column (default to current month/year)
+      return true;
+    },
+
+    uniqueBatches() {
+      const set = new Set(this.products.map((p) => p.productBatch || '').filter(b => b.trim() !== ''));
+      return Array.from(set).sort();
     },
 
     totalPages() {
@@ -392,6 +488,14 @@ export default {
       },
       deep: true,
     },
+    selectedMonth() {
+      this.currentPage = 1;
+      this.handleTimeFilterChange();
+    },
+    selectedYear() {
+      this.currentPage = 1;
+      this.handleTimeFilterChange();
+    },
   },
   mounted() {
     // Set axios baseURL
@@ -407,6 +511,10 @@ export default {
     }
 
     this.fetchData();
+    // Fetch ending inventory with default month/year
+    if (this.selectedMonth && this.selectedYear) {
+      this.fetchEndingInventory();
+    }
     document.addEventListener('click', this.handleDocClick);
   },
   beforeUnmount() {
@@ -419,8 +527,72 @@ export default {
     closeDropDown() {
       this.isDropdownOpen = false;
     },
+    handleTimeFilterChange() {
+      // Always fetch ending inventory when month/year is selected
+      if (this.selectedMonth && this.selectedYear) {
+        this.fetchEndingInventory();
+      } else {
+        this.endingInventoryMap = {};
+      }
+    },
+    async fetchEndingInventory() {
+      try {
+        if (!this.selectedMonth || !this.selectedYear) {
+          this.endingInventoryMap = {};
+          return;
+        }
+
+        // Convert month from "12" to "12" (keep as string, backend will parse)
+        const monthParam = String(parseInt(this.selectedMonth, 10));
+        const yearParam = String(parseInt(this.selectedYear, 10));
+
+        console.log('📊 Fetching ending inventory for:', { month: monthParam, year: yearParam });
+
+        const response = await axios.get('/api/products/ending-inventory', {
+          params: {
+            month: monthParam,
+            year: yearParam,
+          },
+        });
+
+        console.log('✅ Ending inventory response:', response.data);
+
+        if (response.data?.success && response.data?.data?.items) {
+          const items = response.data.data.items;
+          const map = {};
+          items.forEach((item) => {
+            // Use String() to ensure consistent key format
+            map[String(item.productId)] = item.endingInventory;
+          });
+          this.endingInventoryMap = map;
+          console.log('📦 Ending inventory map:', this.endingInventoryMap);
+        } else {
+          console.warn('⚠️ No items in ending inventory response');
+          this.endingInventoryMap = {};
+        }
+      } catch (error) {
+        console.error('❌ Error fetching ending inventory:', error);
+        console.error('❌ Error details:', error.response?.data);
+        this.endingInventoryMap = {};
+        // Don't show error message for ending inventory, just log it
+      }
+    },
+    getEndingInventory(productId) {
+      // Ensure productId is converted to string for consistent lookup
+      const key = String(productId);
+      const value = this.endingInventoryMap[key];
+      return value !== undefined ? value : null;
+    },
+    formatEndingInventory(value) {
+      if (value === null || value === undefined) return '—';
+      return typeof value === 'number' ? value.toLocaleString() : value;
+    },
     async fetchData() {
       await Promise.all([this.fetchProducts(), this.fetchCategories()]);
+      // Fetch ending inventory after products are loaded
+      if (this.selectedMonth && this.selectedYear) {
+        await this.fetchEndingInventory();
+      }
       // Debug: Check all product IDs after fetching
       this.debugProductIds();
     },
@@ -464,9 +636,11 @@ export default {
         this.products = response.data.products || [];
         console.log('📦 Fetched products:', {
           total: this.products.length,
+          batches: this.uniqueBatches,
           sample: this.products.slice(0, 5).map((p) => ({
             id: p._id,
             name: p.name,
+            batch: p.productBatch,
             status: p.status,
             idType: typeof p._id,
             idLength: p._id?.length,

@@ -180,28 +180,6 @@
       <!-- Error details hidden to avoid exposing debug info in UI -->
     </div>
 
-    <!-- Instructions -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6">
-      <h3 class="text-lg font-medium text-blue-900 mb-3">Instructions</h3>
-      <div class="text-sm text-blue-800 space-y-2">
-        <p><strong>Required columns in Excel file:</strong></p>
-        <ul class="list-disc list-inside ml-4 space-y-1">
-          <li><strong>name</strong> - Product name (required)</li>
-          <li><strong>sku</strong> - Product SKU (required, must be unique)</li>
-          <li><strong>description</strong> - Product description (optional)</li>
-          <li><strong>unit</strong> - Unit (pcs, kg, liter, box, pack)</li>
-          <li><strong>basePrice</strong> - Base price (number)</li>
-          <li><strong>quantity</strong> - Initial stock quantity (number, optional)</li>
-          <li><strong>category</strong> - Category name (must exist in system)</li>
-          <li><strong>primarySupplier</strong> - Supplier name (must exist in system)</li>
-          <li><strong>minStockLevel</strong> - Minimum stock level (number, optional)</li>
-        </ul>
-        <p class="mt-3">
-          <strong>Note:</strong> Import date, status, and warehouse will be set automatically. Products will
-          be assigned to your warehouse.
-        </p>
-      </div>
-    </div>
   </div>
 </template>
 

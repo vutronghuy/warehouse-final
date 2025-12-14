@@ -16,11 +16,11 @@
       <nav class="space-y-1">
         <router-link
           to="/Superadmin"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
           :class="
             $route.path === '/Superadmin'
               ? 'text-blue-700 bg-blue-50'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 no-underline'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
           "
         >
           <svg
@@ -43,11 +43,11 @@
 
         <router-link
           to="/Superadmin/users"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
           :class="
             $route.path === '/Superadmin/users'
               ? 'text-purple-700 bg-purple-50'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 no-underline'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
           "
         >
           <svg
@@ -69,11 +69,11 @@
 
         <router-link
           to="/Superadmin/suppliers"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
           :class="
             $route.path === '/Superadmin/suppliers'
               ? 'text-green-700 bg-green-50'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 no-underline'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
           "
         >
           <svg
@@ -95,11 +95,11 @@
 
         <router-link
           to="/Superadmin/categories"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
           :class="
             $route.path === '/Superadmin/categories'
               ? 'text-orange-700 bg-orange-50'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 no-underline'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
           "
         >
           <svg
@@ -121,11 +121,11 @@
 
         <router-link
           to="/Superadmin/target"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
           :class="
             $route.path === '/Superadmin/target'
               ? 'text-orange-700 bg-orange-50'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 no-underline'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
           "
         >
           <svg
@@ -147,11 +147,11 @@
 
         <router-link
           to="/Superadmin/customers"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
           :class="
             $route.path === '/Superadmin/customers'
               ? 'text-pink-700 bg-pink-50'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 no-underline'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
           "
         >
           <svg
@@ -173,7 +173,7 @@
 
         <!-- Products Dropdown -->
         <div class="relative">
-          <button
+          <div
             @click="toggleProductsDropdown"
             class="flex items-center justify-between w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
             :class="
@@ -208,17 +208,17 @@
             >
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
-          </button>
+          </div>
 
           <!-- Dropdown Menu -->
           <div v-show="showProductsDropdown" class="mt-1 ml-8 space-y-1 transition-all duration-200">
             <router-link
               to="/Superadmin/products"
-              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150"
+              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
               :class="
                 $route.path === '/Superadmin/products'
                   ? 'text-blue-700 bg-blue-50'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 no-underline'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               "
             >
               <svg
@@ -240,11 +240,11 @@
 
             <router-link
               to="/Superadmin/products/table"
-              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150"
+              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
               :class="
                 $route.path === '/Superadmin/products/table'
                   ? 'text-blue-700 bg-blue-50'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 no-underline'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               "
             >
               <svg
@@ -268,11 +268,11 @@
 
         <router-link
           to="/Superadmin/warehouses"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
+          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
           :class="
             $route.path === '/Superadmin/warehouses'
               ? 'text-indigo-700 bg-indigo-50'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 no-underline'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
           "
         >
           <svg
@@ -294,7 +294,7 @@
 
         <!-- Inventory Dropdown -->
         <div class="relative">
-          <button
+          <div
             @click="toggleInventoryDropdown"
             class="flex items-center justify-between w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150"
             :class="
@@ -329,17 +329,17 @@
             >
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
-          </button>
+          </div>
 
           <!-- Dropdown Menu -->
           <div v-show="showInventoryDropdown" class="mt-1 ml-8 space-y-1 transition-all duration-200">
             <router-link
               to="/Superadmin/inventory"
-              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150"
+              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
               :class="
                 $route.path === '/Superadmin/inventory'
                   ? 'text-teal-700 bg-teal-50'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 no-underline'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               "
             >
               <svg
@@ -361,11 +361,11 @@
 
             <router-link
               to="/Superadmin/inventory/transactions"
-              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150"
+              class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 no-underline"
               :class="
                 $route.path === '/Superadmin/inventory/transactions'
                   ? 'text-teal-700 bg-teal-50'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 no-underline'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               "
             >
               <svg

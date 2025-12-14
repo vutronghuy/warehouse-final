@@ -1,5 +1,4 @@
 <template>
-  <div class="space-y-6">
     <!-- Header -->
     <div class="flex justify-between items-center">
       <div>
@@ -50,7 +49,7 @@
       :selected-export="selectedExport"
       :is-submitting="isCreating"
       @close="closeCreateModal"
-      @submit="handleCreateSubmit"
+      @created="handleInvoiceCreated"
       @error="showMessage"
     />
 
@@ -74,7 +73,6 @@
       @submit="handleEditSubmit"
       @error="showMessage"
     />
-  </div>
 </template>
 
 <script setup>
@@ -149,121 +147,21 @@ const closeCreateModal = () => {
   selectedExport.value = null;
 };
 
-// handle submit emitted from create modal
-const handleCreateSubmit = async (payload) => {
-  if (!selectedExport.value) {
-    showMessage('No export receipt selected', 'error');
-    return;
+// handle created event from create modal (modal handles submission internally)
+const handleInvoiceCreated = async (invoiceData) => {
+  // Modal already submitted and created invoice, just refresh list and close
+  // Toast notification is already shown in CreateInvoiceModal, no need to show message here
+
+  // Tạo notification cho accounter
+  if (invoiceData?.invoice) {
+    notificationStore.notifyInvoiceCreated(invoiceData.invoice);
   }
 
-  isCreating.value = true;
-  try {
-    // debug: log payload
-    console.log('Creating invoice payload:', {
-      exportReceiptId: selectedExport.value._id,
-      ...payload,
-    });
-
-    const response = await axios.post('/api/invoices/from-export', {
-      exportReceiptId: selectedExport.value._id,
-      ...payload,
-    });
-
-    if (response.data?.success) {
-      if (response.data.isExisting) {
-        // Invoice đã tồn tại - hỏi user có muốn tạo lại không
-        const existingInvoice = response.data.invoice;
-        const shouldRecreate = confirm(
-          `Invoice ${response.data.invoiceNumber} already exists for this export receipt.\n\n` +
-          `Do you want to create a new invoice anyway? (This will create a duplicate)`
-        );
-
-        if (shouldRecreate) {
-          // Tạo invoice mới bất chấp duplicate
-          await createInvoiceFromExportForce(payload);
-        } else {
-          // Hiển thị invoice hiện có
-          showMessage(`Invoice ${response.data.invoiceNumber} already exists for this export receipt`, 'info');
-          await loadMyInvoices();
-          closeCreateModal();
-          activeTab.value = 'my-invoices';
-        }
-      } else {
-        // Invoice mới được tạo
-        showMessage('Invoice created successfully!', 'success');
-
-        // Tạo notification cho accounter
-        const createdInvoice = response.data.invoice;
-        if (createdInvoice) {
-          notificationStore.notifyInvoiceCreated(createdInvoice);
-        }
-
-        await loadMyInvoices();
-        closeCreateModal();
-        activeTab.value = 'my-invoices';
-      }
-    } else {
-      // server trả { success: false, message: ... }
-      showMessage(response.data?.message || 'Failed to create invoice', 'error');
-    }
-  } catch (error) {
-    // show full server response if có
-    console.error('Full axios error:', error);
-    console.error('Response data:', error.response?.data);
-    const errBody = error.response?.data;
-    // prioritize human-friendly messages
-    let errMsg = error.message || 'Failed to create invoice';
-    if (errBody) {
-      if (typeof errBody.message === 'string') errMsg = errBody.message;
-      else if (errBody.errors) errMsg = JSON.stringify(errBody.errors);
-      else errMsg = JSON.stringify(errBody);
-    }
-    showMessage(errMsg, 'error');
-  } finally {
-    isCreating.value = false;
-  }
+  await loadMyInvoices();
+  closeCreateModal();
+  activeTab.value = 'my-invoices';
 };
 
-// Tạo invoice mới bất chấp duplicate
-const createInvoiceFromExportForce = async (payload) => {
-  try {
-    isCreating.value = true;
-
-    const response = await axios.post('/api/invoices/from-export-force', {
-      exportReceiptId: selectedExport.value._id,
-      ...payload,
-    });
-
-    if (response.data?.success) {
-      showMessage('New invoice created successfully!', 'success');
-
-      // Tạo notification cho accounter
-      const createdInvoice = response.data.invoice;
-      if (createdInvoice) {
-        notificationStore.notifyInvoiceCreated(createdInvoice);
-      }
-
-      await loadMyInvoices();
-      closeCreateModal();
-      activeTab.value = 'my-invoices';
-    } else {
-      showMessage(response.data?.message || 'Failed to create invoice', 'error');
-    }
-  } catch (error) {
-    console.error('Full axios error:', error);
-    console.error('Response data:', error.response?.data);
-    const errBody = error.response?.data;
-    let errMsg = error.message || 'Failed to create invoice';
-    if (errBody) {
-      if (typeof errBody.message === 'string') errMsg = errBody.message;
-      else if (errBody.errors) errMsg = JSON.stringify(errBody.errors);
-      else errMsg = JSON.stringify(errBody);
-    }
-    showMessage(errMsg, 'error');
-  } finally {
-    isCreating.value = false;
-  }
-};
 
 // View modal handlers
 const openViewModal = (invoice) => {

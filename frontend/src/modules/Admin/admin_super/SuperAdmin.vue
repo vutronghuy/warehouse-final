@@ -169,7 +169,7 @@
                     <td class="px-6 py-4 whitespace-nowrap text-center relative">
                       <div class="flex items-center justify-center">
                         <!-- Menu button -->
-                        <button
+                        <div
                           @click.stop="toggleActionMenu(user._id)"
                           class="p-2 rounded-full hover:bg-gray-100 focus:outline-none"
                           :aria-expanded="openMenuUserId === user._id ? 'true' : 'false'"
@@ -179,7 +179,7 @@
                           <svg class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                             <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/>
                           </svg>
-                        </button>
+                        </div>
 
                         <!-- Dropdown menu -->
                         <div
@@ -187,10 +187,10 @@
                           @click.stop
                           :class="[
                             'absolute right-6 z-50 w-48 bg-white border border-gray-200 rounded-md shadow-lg py-1',
-                            idx >= paginatedUsers.length - 2 ? 'bottom-10' : 'top-10'
+                            idx >= paginatedUsers.length - 2 ? 'bottom-10' : 'top-10 cursor-pointer'
                           ]"
                         >
-                          <button
+                          <div
                             @click="handleMenuChangeRole(user)"
                             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center space-x-2"
                           >
@@ -198,19 +198,19 @@
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                             </svg>
                             <span>Change Role</span>
-                          </button>
+                          </div>
 
-                          <button
+                          <div
                             @click="handleMenuEdit(user)"
-                            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center space-x-2"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center space-x-2 cursor-pointer"
                           >
                             <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                             </svg>
                             <span>Edit</span>
-                          </button>
+                          </div>
 
-                          <button
+                          <div
                             @click="handleMenuToggleStatus(user)"
                             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center space-x-2"
                           >
@@ -221,9 +221,9 @@
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                             <span>{{ user.userStatus?.status === 'active' ? 'Disable Account' : 'Activate Account' }}</span>
-                          </button>
+                          </div>
 
-                          <button
+                          <div
                             @click="handleMenuDelete(user._id)"
                             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center space-x-2 text-red-600"
                           >
@@ -231,7 +231,7 @@
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                             <span>Delete User</span>
-                          </button>
+                          </div>
                         </div>
                       </div>
                     </td>

@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+
     <!-- Header -->
     <div class="flex justify-between items-center">
       <div>
@@ -213,7 +213,7 @@
       @submit="handleEditSubmit"
       @error="showMessage"
     />
-  </div>
+
 </template>
 
 <script>
@@ -482,7 +482,7 @@ export default {
         });
         if (resp.data?.success) {
           // Hiển thị toast notification thành công
-          this.showToast('Phiếu xuất đã được tạo thành công!', 'success');
+          this.showToast('The export note has been successfully created!', 'success');
 
           // Send notification to manager
           this.notificationStore.notifyExportCreated(resp.data.exportReceipt);
@@ -493,12 +493,12 @@ export default {
           await this.fetchProducts();
         } else {
           // Hiển thị toast notification lỗi
-          this.showToast(resp.data?.message || 'Tạo phiếu xuất thất bại!', 'error');
+          this.showToast(resp.data?.message || 'The export note creation failed!', 'error');
         }
       } catch (err) {
         console.error('Create export error:', err);
         // Hiển thị toast notification lỗi cho catch block
-        this.showToast(err.response?.data?.message || 'Không thể tạo phiếu xuất. Vui lòng thử lại!', 'error');
+        this.showToast(err.response?.data?.message || 'Unable to create a export note. Please try again!', 'error');
       } finally {
         this.isCreating = false;
       }
@@ -507,7 +507,7 @@ export default {
     // Handle customer created event
     async handleCustomerCreated(customer) {
       console.log('✅ New customer created:', customer.name);
-      this.showToast(`Khách hàng "${customer.name}" đã được lưu thành công!`, 'success');
+      this.showToast(`The customer "${customer.name}" has been successfully saved!`, 'success');
       // Refresh customer list
       await this.fetchCustomers();
     },
@@ -515,13 +515,13 @@ export default {
     // Handle customer exists event
     handleCustomerExists(existingCustomer) {
       console.log('ℹ️ Customer already exists:', existingCustomer.name);
-      this.showToast(`Khách hàng "${existingCustomer.name}" đã tồn tại trong cơ sở dữ liệu`, 'info');
+      this.showToast(`The customer "${existingCustomer.name}" already exists in the database.`, 'info');
     },
 
     // Handle customer saved locally event
     handleCustomerSavedLocally(customer) {
       console.log('💾 Customer saved locally:', customer.name);
-      this.showToast(`Khách hàng "${customer.name}" đã được lưu cục bộ để sử dụng sau`, 'info');
+      this.showToast(`The customer "${customer.name}" has been saved locally for later use.`, 'info');
       // Refresh customer list to include the new local customer
       this.fetchCustomers();
     },
@@ -565,17 +565,17 @@ export default {
         });
         if (resp.data?.success) {
           const isResubmit = this.selectedReceipt.status === 'rejected';
-          this.showToast(isResubmit ? 'Phiếu xuất đã được gửi lại thành công!' : 'Phiếu xuất đã được cập nhật thành công!', 'success');
+          this.showToast(isResubmit ? 'The export note has been successfully sent!' : 'The export note has been successfully updated!', 'success');
           this.closeEditModal();
           this.currentPage = 1; // Reset to first page
           await this.fetchExportReceipts();
           await this.fetchProducts();
         } else {
-          this.showToast(resp.data?.message || 'Cập nhật phiếu xuất thất bại!', 'error');
+          this.showToast(resp.data?.message || 'Update failed delivery slip!', 'error');
         }
       } catch (err) {
         console.error('Update export error:', err);
-        this.showToast(err.response?.data?.message || 'Không thể cập nhật phiếu xuất. Vui lòng thử lại!', 'error');
+        this.showToast(err.response?.data?.message || 'Unable to update the export note. Please try again!', 'error');
       } finally {
         this.isUpdating = false;
       }

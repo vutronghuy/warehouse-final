@@ -173,7 +173,7 @@ export default {
         minute: '2-digit',
       });
     };
-
+    //Call API
     const sendMessage = async () => {
       if (!currentMessage.value.trim() || isLoading.value) return;
 

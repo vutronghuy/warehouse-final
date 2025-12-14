@@ -12,7 +12,6 @@ const { exec } = require('child_process');
 // Import new utilities and middlewares
 const { validateEnv } = require('./utils/validateEnv');
 const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
-const { apiRateLimiter, authRateLimiter } = require('./middlewares/rateLimiter');
 
 // Validate environment variables before starting
 try {
@@ -146,18 +145,6 @@ app.use(express.text());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors(corsOptions));
-
-// Apply rate limiting (before routes)
-// Bỏ rate limiting cho /api/auth/login để cho phép login tự do
-app.use('/api/auth', (req, res, next) => {
-  // Bỏ qua rate limiting cho endpoint login
-  if (req.path === '/login' || req.path === '/login/') {
-    return next();
-  }
-  // Áp dụng rate limiting cho các auth endpoints khác
-  return authRateLimiter(req, res, next);
-});
-app.use('/api', apiRateLimiter); // General API rate limiting
 
 // Add request logging middleware
 app.use((req, res, next) => {

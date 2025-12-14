@@ -134,10 +134,16 @@ exports.importProducts = async (req, res) => {
         }
 
         const skuVal = String(row.sku).toUpperCase().trim();
+        const batchValue = row.productBatch ? String(row.productBatch).trim() : '';
+        
+        // Determine the actual SKU to use: if batch exists, use SKU-Batch format
+        // This allows multiple products with same base SKU but different batches
+        const actualSku = batchValue ? `${skuVal}-${batchValue}` : skuVal;
 
-        // Check if product exists
+        // Check if product exists with this SKU (including batch suffix)
+        // This allows multiple products with same base SKU but different batches
         const existingProduct = await Product.findOne({
-          sku: skuVal,
+          sku: actualSku,
           warehouseId,
         }).lean();
 
@@ -198,7 +204,7 @@ exports.importProducts = async (req, res) => {
         }
 
         if (existingProduct) {
-          // Update existing product quantity and price
+          // Product with same SKU-Batch exists, update it
           const addQty = Math.max(0, parseInt(row.quantity) || 0);
           const setFields = { updatedAt: new Date() };
 
@@ -210,6 +216,11 @@ exports.importProducts = async (req, res) => {
           // If categoryId resolved from Excel, set it on update
           if (categoryIdForRow) {
             setFields.categoryId = categoryIdForRow;
+          }
+
+          // Ensure batch is set
+          if (batchValue) {
+            setFields.productBatch = batchValue;
           }
 
           const updateOps = {};
@@ -247,14 +258,14 @@ exports.importProducts = async (req, res) => {
           const importedProduct = {
             productId: existingProduct._id,
             productName: row.name || existingProduct.name || "Unknown Product",
-            productSku: skuVal,
+            productSku: actualSku, // Use actualSku
             quantity: parseInt(row.quantity) || 0,
             unitPrice: parseFloat(row.basePrice) || existingProduct.basePrice || 0,
             supplierId: supplierIdForImport,
             categoryId: categoryIdForRow || existingProduct.categoryId,
             excelRowData: {
               name: row.name,
-              sku: skuVal,
+              sku: skuVal, // Keep original SKU in excelRowData
               quantity: row.quantity,
               basePrice: row.basePrice,
               description: row.description,
@@ -265,7 +276,7 @@ exports.importProducts = async (req, res) => {
           };
 
           importedProducts.push(importedProduct);
-          console.log(`✅ Tracked EXISTING product for import receipt: ${row.name} (${skuVal})`);
+          console.log(`✅ Tracked EXISTING product for import receipt: ${row.name} (${actualSku})`);
         } else {
           // Create new product
           const primarySupplierId = null;
@@ -292,7 +303,7 @@ exports.importProducts = async (req, res) => {
 
           const productData = {
             name: String(row.name).trim(),
-            sku: skuVal,
+            sku: actualSku, // Use actualSku (SKU-Batch format if batch exists)
             description: row.description || "",
             unit: row.unit || "pcs",
             basePrice: parseFloat(row.basePrice) || 0,
@@ -305,7 +316,12 @@ exports.importProducts = async (req, res) => {
             createdBy: req.user.sub,
             createdAt: new Date(),
             updatedAt: new Date(),
+            productBatch: batchValue || "",
           };
+          
+          if (productData.productBatch) {
+            console.log(`📦 Creating product ${actualSku} with batch: "${productData.productBatch}"`);
+          }
 
           // If categoryId still null and schema requires it, we should throw or mark as failed.
           // But we attempted to create fallback 'Uncategorized' above; if still null, mark row failed.
@@ -327,14 +343,14 @@ exports.importProducts = async (req, res) => {
           const importedProduct = {
             productId: product._id,
             productName: row.name || "Unknown Product",
-            productSku: skuVal,
+            productSku: actualSku, // Use actualSku
             quantity: parseInt(row.quantity) || 0,
             unitPrice: parseFloat(row.basePrice) || 0,
             supplierId: resolvedPrimarySupplierId,
             categoryId: productData.categoryId,
             excelRowData: {
               name: row.name,
-              sku: skuVal,
+              sku: skuVal, // Keep original SKU in excelRowData
               quantity: row.quantity,
               basePrice: row.basePrice,
               description: row.description,

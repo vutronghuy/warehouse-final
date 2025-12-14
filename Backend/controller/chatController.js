@@ -152,6 +152,149 @@ function detectTimePeriod(question) {
   return null;
 }
 
+// Month name mapping (English and Vietnamese)
+const monthNameMap = {
+  'january': 1, 'jan': 1, 'tháng 1': 1, 'tháng một': 1,
+  'february': 2, 'feb': 2, 'tháng 2': 2, 'tháng hai': 2,
+  'march': 3, 'mar': 3, 'tháng 3': 3, 'tháng ba': 3,
+  'april': 4, 'apr': 4, 'tháng 4': 4, 'tháng tư': 4, 'tháng bốn': 4,
+  'may': 5, 'tháng 5': 5, 'tháng năm': 5,
+  'june': 6, 'jun': 6, 'tháng 6': 6, 'tháng sáu': 6,
+  'july': 7, 'jul': 7, 'tháng 7': 7, 'tháng bảy': 7,
+  'august': 8, 'aug': 8, 'tháng 8': 8, 'tháng tám': 8,
+  'september': 9, 'sep': 9, 'sept': 9, 'tháng 9': 9, 'tháng chín': 9,
+  'october': 10, 'oct': 10, 'tháng 10': 10, 'tháng mười': 10,
+  'november': 11, 'nov': 11, 'tháng 11': 11, 'tháng mười một': 11,
+  'december': 12, 'dec': 12, 'tháng 12': 12, 'tháng mười hai': 12
+};
+
+// Detect month comparison in question - supports multiple months in same year or same month across different years
+function detectMonthComparison(question) {
+  const normalized = (question || '').toString().toLowerCase();
+  if (!normalized) return null;
+
+  // Check if question contains comparison keywords
+  const comparisonKeywords = [
+    'so sánh',
+    'compare',
+    'comparison',
+    'và',
+    'and',
+    'vs',
+    'versus',
+    'between',
+    'các tháng',
+    'months'
+  ];
+  
+  const hasComparison = comparisonKeywords.some(keyword => normalized.includes(keyword));
+  if (!hasComparison) return null;
+
+  const months = [];
+  const years = [];
+
+  // Extract years from question
+  const yearMatches = normalized.match(/\b(20\d{2})\b/g);
+  if (yearMatches) {
+    yearMatches.forEach(y => {
+      const year = parseInt(y, 10);
+      if (year >= 2000 && year <= 2100 && !years.includes(year)) {
+        years.push(year);
+      }
+    });
+  }
+
+  // First, try to extract month names (English and Vietnamese)
+  for (const [name, num] of Object.entries(monthNameMap)) {
+    const regex = new RegExp(`\\b${name}\\b`, 'gi');
+    if (regex.test(normalized)) {
+      if (!months.includes(num)) {
+        months.push(num);
+      }
+    }
+  }
+
+  // Then, try to extract numeric months
+  // Patterns: "tháng 11 và tháng 12", "month 11 and month 12", "tháng 11 vs tháng 12"
+  const monthPatterns = [
+    /tháng\s+(\d{1,2})/g,  // "tháng 11"
+    /month\s+(\d{1,2})/gi,  // "month 11"
+    /\b(\d{1,2})\s*\/\s*\d{4}/g,  // "11/2024"
+  ];
+
+  for (const pattern of monthPatterns) {
+    let match;
+    while ((match = pattern.exec(normalized)) !== null) {
+      const month = parseInt(match[1], 10);
+      if (month >= 1 && month <= 12 && !months.includes(month)) {
+        months.push(month);
+      }
+    }
+  }
+
+  // Also try to extract standalone month numbers (1-12) near comparison keywords
+  if (months.length < 2) {
+    const standaloneMonths = normalized.match(/\b(1[0-2]|[1-9])\b/g);
+    if (standaloneMonths) {
+      standaloneMonths.forEach(m => {
+        const month = parseInt(m, 10);
+        if (month >= 1 && month <= 12 && !months.includes(month)) {
+          months.push(month);
+        }
+      });
+    }
+  }
+
+  // Extract default year (current year if not specified)
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const defaultYear = years.length > 0 ? years[0] : currentYear;
+
+  // Case 1: Multiple months in same year (e.g., "so sánh tháng 1, 2, 3 năm 2025")
+  if (months.length >= 2 && years.length <= 1) {
+    return {
+      type: 'multiple_months_same_year',
+      year: defaultYear,
+      months: months.sort((a, b) => a - b) // Sort months
+    };
+  }
+
+  // Case 2: Same month across different years (e.g., "so sánh tháng 11 năm 2024 và 2025")
+  if (months.length === 1 && years.length >= 2) {
+    return {
+      type: 'same_month_different_years',
+      month: months[0],
+      years: years.sort((a, b) => a - b) // Sort years
+    };
+  }
+
+  // Case 3: Multiple months and multiple years (e.g., "so sánh tháng 11 năm 2024 và tháng 12 năm 2025")
+  // This is complex, we'll handle it as multiple comparisons
+  if (months.length >= 2 && years.length >= 2) {
+    // Try to match months with years if pattern is clear
+    // For now, return first 2 months with their respective years if available
+    return {
+      type: 'multiple_months_years',
+      comparisons: [
+        { year: years[0] || defaultYear, month: months[0] },
+        { year: years[1] || defaultYear, month: months[1] }
+      ]
+    };
+  }
+
+  // Case 4: Two months in same year (backward compatibility)
+  if (months.length >= 2) {
+    return {
+      type: 'two_months_same_year',
+      year: defaultYear,
+      month1: months[0],
+      month2: months[1]
+    };
+  }
+
+  return null;
+}
+
 function sanitizeFilter(filter) {
   if (Array.isArray(filter)) {
     return filter.map((item) => (typeof item === 'object' ? sanitizeFilter(item) : item));
@@ -177,6 +320,9 @@ function formatDatasetsForContext(datasets) {
     .map(({ collection, documents }) => {
       if (collection === '__finance_summary') {
         return `Collection: finance_summary\n${JSON.stringify(documents[0] || {}, null, 2)}`;
+      }
+      if (collection === '__finance_comparison') {
+        return `Collection: finance_comparison\n${JSON.stringify(documents[0] || {}, null, 2)}`;
       }
       if (!documents.length) {
         return `Collection: ${collection}\n[]`;
@@ -437,7 +583,7 @@ async function initMongoClient() {
   }
 }
 
-// Controller function
+// Controller function -----
 async function chatController(req, res) {
   try {
     await initMongoClient();
@@ -507,25 +653,206 @@ async function chatController(req, res) {
     }
 
     if (financeRequested) {
-      // Auto-detect time period from question if not provided
-      let finalYear = year;
-      let finalMonth = month;
+      // Check if question asks for month comparison
+      const monthComparison = detectMonthComparison(question);
       
-      if (!finalYear || !finalMonth) {
-        const detectedPeriod = detectTimePeriod(question);
-        if (detectedPeriod) {
-          finalYear = detectedPeriod.year;
-          finalMonth = detectedPeriod.month;
+      if (monthComparison) {
+        let comparisonSummary = null;
+
+        // Handle different comparison types
+        if (monthComparison.type === 'multiple_months_same_year') {
+          // Compare multiple months in the same year
+          const summaries = [];
+          for (const month of monthComparison.months) {
+            const summary = await buildFinanceSummary(db, {
+              warehouseId,
+              year: monthComparison.year,
+              month: month
+            });
+            if (summary) {
+              const revenue = summary.revenueCurrent !== null && summary.revenueCurrent !== undefined 
+                ? summary.revenueCurrent 
+                : (summary.totalRevenueVND || 0);
+              summaries.push({
+                month: month,
+                year: monthComparison.year,
+                revenue: revenue,
+                cost: summary.totalCostVND || 0,
+                profit: summary.profitVND || 0,
+                invoiceCount: summary.invoiceCount || 0
+              });
+            }
+          }
+          
+          if (summaries.length >= 2) {
+            // Find highest and lowest revenue
+            const sortedByRevenue = [...summaries].sort((a, b) => b.revenue - a.revenue);
+            comparisonSummary = {
+              type: 'multiple_months_same_year',
+              year: monthComparison.year,
+              months: summaries,
+              highest: sortedByRevenue[0],
+              lowest: sortedByRevenue[sortedByRevenue.length - 1],
+              totalRevenue: summaries.reduce((sum, s) => sum + s.revenue, 0),
+              averageRevenue: summaries.reduce((sum, s) => sum + s.revenue, 0) / summaries.length
+            };
+          }
+        } else if (monthComparison.type === 'same_month_different_years') {
+          // Compare same month across different years
+          const summaries = [];
+          for (const year of monthComparison.years) {
+            const summary = await buildFinanceSummary(db, {
+              warehouseId,
+              year: year,
+              month: monthComparison.month
+            });
+            if (summary) {
+              const revenue = summary.revenueCurrent !== null && summary.revenueCurrent !== undefined 
+                ? summary.revenueCurrent 
+                : (summary.totalRevenueVND || 0);
+              summaries.push({
+                month: monthComparison.month,
+                year: year,
+                revenue: revenue,
+                cost: summary.totalCostVND || 0,
+                profit: summary.profitVND || 0,
+                invoiceCount: summary.invoiceCount || 0
+              });
+            }
+          }
+          
+          if (summaries.length >= 2) {
+            const sortedByRevenue = [...summaries].sort((a, b) => b.revenue - a.revenue);
+            comparisonSummary = {
+              type: 'same_month_different_years',
+              month: monthComparison.month,
+              years: summaries,
+              highest: sortedByRevenue[0],
+              lowest: sortedByRevenue[sortedByRevenue.length - 1],
+              revenueDiff: summaries[summaries.length - 1].revenue - summaries[0].revenue,
+              revenueDiffPercent: summaries[0].revenue > 0 
+                ? ((summaries[summaries.length - 1].revenue - summaries[0].revenue) / summaries[0].revenue) * 100 
+                : null
+            };
+          }
+        } else if (monthComparison.type === 'multiple_months_years') {
+          // Compare multiple months across different years
+          const summaries = [];
+          for (const comp of monthComparison.comparisons) {
+            const summary = await buildFinanceSummary(db, {
+              warehouseId,
+              year: comp.year,
+              month: comp.month
+            });
+            if (summary) {
+              const revenue = summary.revenueCurrent !== null && summary.revenueCurrent !== undefined 
+                ? summary.revenueCurrent 
+                : (summary.totalRevenueVND || 0);
+              summaries.push({
+                month: comp.month,
+                year: comp.year,
+                revenue: revenue,
+                cost: summary.totalCostVND || 0,
+                profit: summary.profitVND || 0,
+                invoiceCount: summary.invoiceCount || 0
+              });
+            }
+          }
+          
+          if (summaries.length >= 2) {
+            comparisonSummary = {
+              type: 'multiple_months_years',
+              periods: summaries,
+              highest: summaries.reduce((max, s) => s.revenue > max.revenue ? s : max, summaries[0]),
+              lowest: summaries.reduce((min, s) => s.revenue < min.revenue ? s : min, summaries[0])
+            };
+          }
+        } else if (monthComparison.type === 'two_months_same_year' || (!monthComparison.type && monthComparison.month1 && monthComparison.month2)) {
+          // Backward compatibility: two months in same year
+          const summary1 = await buildFinanceSummary(db, {
+            warehouseId,
+            year: monthComparison.year,
+            month: monthComparison.month1
+          });
+          
+          const summary2 = await buildFinanceSummary(db, {
+            warehouseId,
+            year: monthComparison.year,
+            month: monthComparison.month2
+          });
+          
+          if (summary1 && summary2) {
+            const revenue1 = summary1.revenueCurrent !== null && summary1.revenueCurrent !== undefined 
+              ? summary1.revenueCurrent 
+              : (summary1.totalRevenueVND || 0);
+            const revenue2 = summary2.revenueCurrent !== null && summary2.revenueCurrent !== undefined 
+              ? summary2.revenueCurrent 
+              : (summary2.totalRevenueVND || 0);
+            
+            comparisonSummary = {
+              type: 'two_months_same_year',
+              month1: {
+                month: monthComparison.month1,
+                year: monthComparison.year,
+                revenue: revenue1,
+                cost: summary1.totalCostVND || 0,
+                profit: summary1.profitVND || 0,
+                invoiceCount: summary1.invoiceCount || 0
+              },
+              month2: {
+                month: monthComparison.month2,
+                year: monthComparison.year,
+                revenue: revenue2,
+                cost: summary2.totalCostVND || 0,
+                profit: summary2.profitVND || 0,
+                invoiceCount: summary2.invoiceCount || 0
+              },
+              comparison: {
+                revenueDiff: revenue2 - revenue1,
+                revenueDiffPercent: revenue1 > 0 ? ((revenue2 - revenue1) / revenue1) * 100 : null,
+                profitDiff: (summary2.profitVND || 0) - (summary1.profitVND || 0)
+              }
+            };
+          }
         }
-      }
-      
-      const financeSummary = await buildFinanceSummary(db, { 
-        warehouseId, 
-        year: finalYear, 
-        month: finalMonth 
-      });
-      if (financeSummary) {
-        datasets.push({ collection: '__finance_summary', documents: [financeSummary] });
+        
+        if (comparisonSummary) {
+          datasets.push({ collection: '__finance_comparison', documents: [comparisonSummary] });
+        } else {
+          // Fallback: use single month if comparison fails
+          const detectedPeriod = detectTimePeriod(question);
+          if (detectedPeriod) {
+            const financeSummary = await buildFinanceSummary(db, {
+              warehouseId,
+              year: detectedPeriod.year,
+              month: detectedPeriod.month
+            });
+            if (financeSummary) {
+              datasets.push({ collection: '__finance_summary', documents: [financeSummary] });
+            }
+          }
+        }
+      } else {
+        // Auto-detect time period from question if not provided
+        let finalYear = year;
+        let finalMonth = month;
+        
+        if (!finalYear || !finalMonth) {
+          const detectedPeriod = detectTimePeriod(question);
+          if (detectedPeriod) {
+            finalYear = detectedPeriod.year;
+            finalMonth = detectedPeriod.month;
+          }
+        }
+        
+        const financeSummary = await buildFinanceSummary(db, { 
+          warehouseId, 
+          year: finalYear, 
+          month: finalMonth 
+        });
+        if (financeSummary) {
+          datasets.push({ collection: '__finance_summary', documents: [financeSummary] });
+        }
       }
     }
 
@@ -534,12 +861,49 @@ async function chatController(req, res) {
     }
 
     const context = formatDatasetsForContext(datasets);
+    const hasComparison = datasets.some(d => d.collection === '__finance_comparison');
     const financeGuidance = financeRequested ? `
 FINANCE DEFINITIONS:
 - Revenue (doanh thu) = sum of invoice.finalAmount where status ∈ {"approved","paid"}.
 - Cost = sum of import receipt detail unitPrice * quantity (USD) converted to VND at rate ${USD_TO_VND_RATE}.
 - Profit = Revenue - Cost.
 - Profit margin = Profit / Revenue.
+${hasComparison ? `
+COMPARISON DATA:
+The data contains financial comparisons. The structure depends on the comparison type:
+
+1. For "multiple_months_same_year" (comparing multiple months in same year):
+   - type: "multiple_months_same_year"
+   - year: The year being compared
+   - months: Array of month data, each with: month (1-12), year, revenue (VND), cost (VND), profit (VND), invoiceCount
+   - highest: The month with highest revenue
+   - lowest: The month with lowest revenue
+   - totalRevenue: Sum of all months' revenue
+   - averageRevenue: Average revenue across all months
+
+2. For "same_month_different_years" (comparing same month across years):
+   - type: "same_month_different_years"
+   - month: The month number (1-12)
+   - years: Array of year data, each with: month, year, revenue (VND), cost (VND), profit (VND), invoiceCount
+   - highest: The year with highest revenue for this month
+   - lowest: The year with lowest revenue for this month
+   - revenueDiff: Difference between last and first year
+   - revenueDiffPercent: Percentage change
+
+3. For "two_months_same_year" (comparing 2 months):
+   - type: "two_months_same_year"
+   - month1: First month data (month, year, revenue, cost, profit, invoiceCount)
+   - month2: Second month data
+   - comparison: Contains revenueDiff, revenueDiffPercent, profitDiff
+
+IMPORTANT: When comparing, you MUST:
+  1. Identify the comparison type from the data structure
+  2. Clearly state which period(s) have higher/lower revenue
+  3. State exact revenue amounts in VND for all periods
+  4. Calculate and state differences and percentage changes
+  5. For multiple months, identify the highest and lowest
+  6. Answer in Vietnamese if the question is in Vietnamese, otherwise in English
+` : ''}
 ` : '';
     const prompt = `
 You are a data analysis assistant. Your job is to analyze ONLY the MongoDB data provided below 
@@ -547,10 +911,11 @@ and answer the QUESTION. You must reason based on numbers found in the data.
 
 RULES:
 - Do NOT invent data.
-- If the question involves comparison (e.g., highest, lowest, top), analyze the numeric fields.
+- If the question involves comparison (e.g., highest, lowest, top, so sánh), analyze the numeric fields.
 - If a field is missing, ignore that document.
-- Return a clear, human-friendly answer.
-- Also include the _id(s) of documents used for your conclusion.
+- Return a clear, human-friendly answer in Vietnamese if the question is in Vietnamese, otherwise in English.
+- For comparison questions, clearly state which period/month has higher values and the differences.
+- Also include the _id(s) of documents used for your conclusion if available.
 
 ${financeGuidance}
 

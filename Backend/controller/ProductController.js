@@ -1,6 +1,9 @@
 const Product = require('../models/products/product');
 const User = require('../models/User');
 const mongoose = require('mongoose');
+const InventoryTransaction = require('../models/inventory/InventoryTransaction');
+const ImportReceipt = require('../models/import/ImportReceipt');
+const ExportReceipt = require('../models/export/ExportReceipt');
 const ProductImportController = require('./ProductImportController');
 
 // Get all products
@@ -130,6 +133,179 @@ exports.getAllProducts = async (req, res, next) => {
     }
   } catch (error) {
     console.error('Error fetching products:', error);
+    next(error);
+  }
+};
+
+/**
+ * Tính tồn cuối kỳ (Ending Inventory) cho từng sản phẩm theo tháng/năm được chọn.
+ * Dựa trực tiếp vào phiếu nhập/xuất của đúng kỳ được chọn:
+ *   Ending = Max(0, Tổng nhập lũy kế đến cuối tháng - Tổng xuất lũy kế đến cuối tháng)
+ * Nghĩa là tồn đầu kỳ tháng X = tồn cuối kỳ tháng X-1 (tự động do cộng lũy kế).
+ * Nếu không có giao dịch trước đó, tồn đầu kỳ = 0.
+ */
+exports.getEndingInventoryByMonth = async (req, res, next) => {
+  try {
+    const { month, year, warehouseId } = req.query;
+
+    const monthNum = parseInt(month, 10);
+    const yearNum = parseInt(year, 10);
+
+    if (!monthNum || !yearNum || monthNum < 1 || monthNum > 12 || yearNum < 1900) {
+      return res.status(400).json({
+        success: false,
+        message: 'month (1-12) và year hợp lệ là bắt buộc'
+      });
+    }
+
+    // Mốc thời gian cuối tháng được chọn (dùng để tính lũy kế)
+    const endOfMonth = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+
+    // Xây filter giống getAll để giữ nguyên phân quyền/warehouse filter
+    const filter = {};
+    let warehouseFilterForAggregation = {};
+
+    if (warehouseId) {
+      filter.warehouseId = warehouseId;
+      warehouseFilterForAggregation.warehouseId = new mongoose.Types.ObjectId(String(warehouseId));
+    }
+
+    if (req.user && !req.user.isSuperAdmin) {
+      try {
+        const user = await User.findById(req.user.sub).lean();
+        if (user) {
+          let userWarehouseIds = [];
+
+          if (req.user.role === 'staff' && user.staff?.warehouseId) {
+            userWarehouseIds = [user.staff.warehouseId];
+          } else if (req.user.role === 'manager' && user.manager?.warehouseId) {
+            userWarehouseIds = [user.manager.warehouseId];
+          } else if (req.user.role === 'accounter' && user.accounter?.warehouseId) {
+            userWarehouseIds = [user.accounter.warehouseId];
+          } else if (req.user.role === 'admin' && user.admin?.managedWarehouses?.length > 0) {
+            userWarehouseIds = user.admin.managedWarehouses;
+          }
+
+          if (userWarehouseIds.length > 0) {
+            filter.warehouseId = userWarehouseIds.length === 1 ? userWarehouseIds[0] : { $in: userWarehouseIds };
+            // Apply same warehouse filter to aggregation
+            warehouseFilterForAggregation.warehouseId = userWarehouseIds.length === 1 
+              ? new mongoose.Types.ObjectId(String(userWarehouseIds[0]))
+              : { $in: userWarehouseIds.map(id => new mongoose.Types.ObjectId(String(id))) };
+          }
+        }
+      } catch (userError) {
+        console.error('Error fetching user warehouse info:', userError);
+      }
+    }
+
+    const products = await Product.find(filter)
+      .select('_id name sku unit quantity warehouseId categoryId')
+      .populate('categoryId', 'name')
+      .populate('warehouseId', 'name location')
+      .lean();
+
+    if (!products.length) {
+      return res.json({
+        success: true,
+        data: { month: monthNum, year: yearNum, items: [] }
+      });
+    }
+
+    const productIds = products.map((p) => p._id);
+
+    // Tổng nhập lũy kế đến cuối tháng (ImportReceipt details)
+    const importAgg = await ImportReceipt.aggregate([
+      {
+        $match: {
+          deletedAt: null,
+          createdAt: { $lte: endOfMonth },
+          ...warehouseFilterForAggregation
+        }
+      },
+      { $unwind: '$details' },
+      {
+        $match: {
+          'details.productId': { $in: productIds }
+        }
+      },
+      {
+        $group: {
+          _id: '$details.productId',
+          totalImport: { $sum: { $ifNull: ['$details.quantity', 0] } }
+        }
+      }
+    ]);
+
+    // Tổng xuất lũy kế đến cuối tháng (ExportReceipt details) – chỉ tính phiếu đã duyệt/đã xác nhận
+    const exportAgg = await ExportReceipt.aggregate([
+      {
+        $match: {
+          deletedAt: null,
+          createdAt: { $lte: endOfMonth },
+          status: { $in: ['approved', 'confirmed'] },
+          ...warehouseFilterForAggregation
+        }
+      },
+      { $unwind: '$details' },
+      {
+        $match: {
+          'details.productId': { $in: productIds }
+        }
+      },
+      {
+        $group: {
+          _id: '$details.productId',
+          totalExport: { $sum: { $ifNull: ['$details.quantity', 0] } }
+        }
+      }
+    ]);
+
+    const importMap = new Map(importAgg.map((i) => [String(i._id), i.totalImport]));
+    const exportMap = new Map(exportAgg.map((e) => [String(e._id), e.totalExport]));
+
+    const items = products.map((p, index) => {
+      const totalImport = importMap.get(String(p._id)) || 0;
+      const totalExport = exportMap.get(String(p._id)) || 0;
+      const endingInventory = Math.max(0, totalImport - totalExport);
+
+      // Debug log for first product only
+      if (index === 0) {
+        console.log('📊 Ending Inventory Calculation (First Product):', {
+          productId: String(p._id),
+          productName: p.name,
+          totalImport,
+          totalExport,
+          endingInventory,
+          currentQuantity: p.quantity || 0,
+          endOfMonth: endOfMonth.toISOString(),
+          month: monthNum,
+          year: yearNum
+        });
+      }
+
+      return {
+        productId: String(p._id), // Ensure productId is string for frontend lookup
+        name: p.name,
+        sku: p.sku,
+        unit: p.unit,
+        categoryId: p.categoryId,
+        warehouseId: p.warehouseId,
+        currentQuantity: p.quantity || 0,
+        endingInventory
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        month: monthNum,
+        year: yearNum,
+        items
+      }
+    });
+  } catch (error) {
+    console.error('Error calculating ending inventory:', error);
     next(error);
   }
 };

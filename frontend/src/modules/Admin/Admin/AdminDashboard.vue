@@ -6,7 +6,7 @@
       <!-- Header Stats (Customers + Orders) -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <!-- Customers Card -->
-        <div class="bg-white rounded-xl shadow-sm border p- 6">
+        <div class="bg-white rounded-xl shadow-sm border p-6 ml-5">
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center">
               <div class="bg-gray-100 rounded-lg p-2 mr-3">
@@ -96,7 +96,7 @@
         </div>
 
         <!-- Orders Card -->
-        <div class="bg-white rounded-xl shadow-sm border p-6">
+        <div class="bg-white rounded-xl shadow-sm border p-6 mr-5">
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center">
               <div class="bg-gray-100 rounded-lg p-2 mr-3">
@@ -179,7 +179,7 @@
       <!-- Sales + Target area -->
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
         <!-- Monthly Sales Chart (Chart.js) -->
-        <div class="xl:col-span-2 bg-white rounded-xl shadow-sm border p-6">
+        <div class="xl:col-span-2 bg-white rounded-xl shadow-sm border p-6 ml-5">
           <div class="flex items-center justify-between mb-6">
             <div>
               <h3 class="text-lg font-semibold text-gray-900">Monthly Sales</h3>
@@ -204,7 +204,7 @@
         </div>
 
         <!-- Monthly Target -->
-        <div class="bg-white rounded-xl shadow-sm border p-4">
+        <div class="bg-white rounded-xl shadow-sm border p-4 mr-5">
           <div class="flex items-start justify-between mb-4">
             <div>
               <h3 class="text-lg font-semibold text-gray-900">Monthly Target</h3>
@@ -340,6 +340,9 @@ import { ChatBot } from '@/components';
 import Chart from 'chart.js/auto'; // npm i chart.js
 import socketService from '@/services/socketService';
 
+// Exchange rate constant (same as AccounterDashboardSimple.vue)
+const USD_TO_VND_RATE = 26401; // 1 USD = 26,401 VND
+
 // initial dates
 const now = new Date();
 const currentYear = now.getFullYear();
@@ -413,11 +416,21 @@ const formatNumber = (n) => {
 const formatCurrency = (v) => {
   if (v === null || v === undefined) return '-';
   const n = Number(v) || 0;
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'VND',
     maximumFractionDigits: 0,
   }).format(n);
+};
+
+// Helper: convert amount to VND (same as AccounterDashboardSimple.vue)
+const amountToVND = (value, currency) => {
+  const n = Number(value) || 0;
+  if (!currency) {
+    // fallback: if number small assume USD else VND (heuristic)
+    return n > 1000000 ? Math.round(n) : Math.round(n * USD_TO_VND_RATE);
+  }
+  return currency.toUpperCase() === 'USD' ? Math.round(n * USD_TO_VND_RATE) : Math.round(n);
 };
 const monthShortName = (m) => new Date(0, m - 1).toLocaleString(undefined, { month: 'short' });
 
@@ -527,12 +540,23 @@ async function fetchMonthlySales() {
       const byMonth = Array.from({ length: 12 }, (_, i) => {
         const m = i + 1;
         const found = res.data.monthlySales.find((s) => Number(s._id ?? s.month) === m);
-        return { month: m, total: found ? Number(found.total ?? found.amount ?? 0) : 0 };
+        if (found) {
+          // Backend now returns total in VND (already converted)
+          // If totalOriginal exists and is different, it means conversion happened
+          const totalVND = Number(found.total ?? found.amount ?? 0);
+          // Fallback: if value seems too small, might be in USD (for backward compatibility)
+          const total = totalVND > 1000000 ? totalVND : amountToVND(totalVND, found.currencies?.[0] || 'USD');
+          return { month: m, total };
+        }
+        return { month: m, total: 0 };
       });
       monthSeries.value = byMonth;
+
+      // Backend now returns revenue in VND (already converted)
       sales.value.metrics.revenue = Number(res.data.revenue) || 0;
     } else {
-      sales.value.metrics.revenue = Number(res.data?.revenue) || sales.value.metrics.revenue || 0;
+      // Backend now returns revenue in VND (already converted)
+      sales.value.metrics.revenue = Number(res.data?.revenue) || 0;
     }
 
     // ======= IMPORTANT CHANGE: chartMax now uses ONLY the highest month value (not annual total) =======
@@ -595,6 +619,7 @@ async function fetchTarget() {
     console.log('🎯 Fetching revenue data with params:', revenueQ);
     const revRes = await axios.get('/api/invoices/dashboard', { params: revenueQ });
     if (revRes.data?.success) {
+      // Backend now returns revenue in VND (already converted)
       target.value.metrics.revenue = Number(revRes.data.revenue) || 0;
       console.log('🎯 Revenue updated to:', target.value.metrics.revenue);
     } else {
@@ -625,6 +650,7 @@ async function fetchDailyRevenue(dateStr) {
     const q = buildQueryFromFilter({ period: 'day', date: d });
     const res = await axios.get('/api/invoices/dashboard', { params: q });
     if (res.data?.success) {
+      // Backend now returns revenue in VND (already converted)
       todayRevenue.value = Number(res.data.revenue) || 0;
     } else {
       todayRevenue.value = 0;

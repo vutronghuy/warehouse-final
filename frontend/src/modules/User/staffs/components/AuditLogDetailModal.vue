@@ -276,15 +276,15 @@ const formatFieldValue = (fieldName, value) => {
 
   if (fieldName === 'status') {
     const statusMap = {
-      created: 'Đã tạo',
-      pending_review: 'Chờ duyệt',
-      approved: 'Đã duyệt',
-      rejected: 'Từ chối',
-      paid: 'Đã thanh toán',
-      draft: 'Bản nháp',
-      reviewed: 'Đã xem xét',
-      'in stock': 'Còn hàng',
-      'out of stock': 'Hết hàng',
+      created: 'Created',
+      pending_review: 'Pending review',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      paid: 'Paid',
+      draft: 'Draft',
+      reviewed: 'Reviewed',
+      'in stock': 'In stock',
+      'out of stock': 'Out of stock',
     };
     return statusMap[value] || value;
   }
@@ -302,8 +302,8 @@ const formatFieldValue = (fieldName, value) => {
 
   if (fieldName === 'currency') {
     const currencyMap = {
-      VND: 'Việt Nam Đồng',
-      USD: 'Đô la Mỹ',
+      VND: 'VND',
+      USD: 'USD',
       EUR: 'Euro',
     };
     return currencyMap[value] || value;

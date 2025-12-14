@@ -726,11 +726,26 @@ const dashboard = async (req, res, next) => {
       deletedAt: null
     }).lean();
 
-    // Calculate statistics
-    const revenue = invoices.reduce((sum, inv) => sum + (inv.finalAmount || 0), 0);
+    // Exchange rates for currency conversion
+    const USD_TO_VND_RATE = Number(process.env.USD_TO_VND_RATE) || 26401;
+    const EUR_TO_VND_RATE = Number(process.env.EUR_TO_VND_RATE) || 28500;
+    
+    // Calculate statistics (convert to VND)
+    const revenue = invoices.reduce((sum, inv) => {
+      const amount = inv.finalAmount || 0;
+      const currency = inv.currency || 'VND';
+      let amountVND = amount;
+      if (currency === 'USD') {
+        amountVND = amount * USD_TO_VND_RATE;
+      } else if (currency === 'EUR') {
+        amountVND = amount * EUR_TO_VND_RATE;
+      }
+      return sum + amountVND;
+    }, 0);
     const invoicesCount = invoices.length;
 
-    // Get monthly data for chart
+    // Get monthly data for chart (with currency conversion support)
+    
     const monthlySales = await Invoice.aggregate([
       {
         $match: {
@@ -740,15 +755,36 @@ const dashboard = async (req, res, next) => {
         }
       },
       {
+        $addFields: {
+          finalAmountVND: {
+            $cond: [
+              { $eq: ['$currency', 'USD'] },
+              { $multiply: [{ $ifNull: ['$finalAmount', 0] }, { $literal: USD_TO_VND_RATE }] },
+              {
+                $cond: [
+                  { $eq: ['$currency', 'EUR'] },
+                  { $multiply: [{ $ifNull: ['$finalAmount', 0] }, { $literal: EUR_TO_VND_RATE }] },
+                  { $ifNull: ['$finalAmount', 0] } // VND
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
         $group: {
           _id: { $month: '$createdAt' },
-          total: { $sum: '$finalAmount' }
+          total: { $sum: '$finalAmountVND' },
+          totalOriginal: { $sum: '$finalAmount' },
+          currencies: { $addToSet: '$currency' }
         }
       },
       {
         $project: {
           month: '$_id',
           total: 1,
+          totalOriginal: 1,
+          currencies: 1,
           _id: 0
         }
       },
@@ -1171,12 +1207,33 @@ const getTotalRevenue = async (req, res, next) => {
       matchStage.warehouseId = new mongoose.Types.ObjectId(String(effectiveWarehouse));
     }
 
+    // Exchange rates
+    const USD_TO_VND_RATE = Number(process.env.USD_TO_VND_RATE) || 26401;
+    const EUR_TO_VND_RATE = Number(process.env.EUR_TO_VND_RATE) || 28500;
+
     const result = await Invoice.aggregate([
       { $match: matchStage },
       {
+        $addFields: {
+          finalAmountVND: {
+            $cond: [
+              { $eq: ['$currency', 'USD'] },
+              { $multiply: ['$finalAmount', USD_TO_VND_RATE] },
+              {
+                $cond: [
+                  { $eq: ['$currency', 'EUR'] },
+                  { $multiply: ['$finalAmount', EUR_TO_VND_RATE] },
+                  '$finalAmount' // VND
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
         $group: {
           _id: null,
-          totalRevenue: { $sum: '$finalAmount' },
+          totalRevenue: { $sum: '$finalAmountVND' },
           totalInvoices: { $sum: 1 }
         }
       }
@@ -1451,42 +1508,150 @@ const exportInvoiceAsPDF = async (req, res, next) => {
       });
     };
 
-    // Header
-    doc.fontSize(24).font('Helvetica-Bold').text('HÓA ĐƠN BÁN HÀNG', 50, 50, { align: 'center' });
-    doc.fontSize(14).font('Helvetica-Bold').text(`Invoice ${invoice.invoiceNumber}`, 50, 80, { align: 'center' });
-    
-    // Status badge
-    const statusMap = {
-      draft: { text: 'Draft', color: [128, 128, 128] },
-      pending_review: { text: 'Pending Review', color: [234, 179, 8] },
-      approved: { text: 'Approved', color: [34, 197, 94] },
-      rejected: { text: 'Rejected', color: [239, 68, 68] },
-      paid: { text: 'Paid', color: [59, 130, 246] }
+    // Helper function to format and clean address
+    const formatAddress = (address) => {
+      if (!address) return 'N/A';
+      
+      try {
+        // Basic Vietnamese to English address translation mapping
+        const addressMap = {
+          'phường': 'Ward',
+          'quận': 'District',
+          'huyện': 'District',
+          'thành phố': 'City',
+          'tỉnh': 'Province',
+          'đường': 'Street',
+          'phố': 'Street',
+          'số': 'No.',
+          'ngõ': 'Alley',
+          'ngách': 'Lane',
+          'hà nội': 'Hanoi',
+          'hồ chí minh': 'Ho Chi Minh City',
+          'đà nẵng': 'Da Nang',
+          'hải phòng': 'Hai Phong',
+          'cần thơ': 'Can Tho'
+        };
+        
+        let cleanedAddress = String(address)
+          .normalize('NFD') // Normalize to decomposed form
+          .replace(/[\u0300-\u036f]/g, '') // Remove diacritics (accents)
+          .toLowerCase();
+        
+        // Replace Vietnamese terms with English
+        Object.keys(addressMap).forEach(vnTerm => {
+          const regex = new RegExp(vnTerm, 'gi');
+          cleanedAddress = cleanedAddress.replace(regex, addressMap[vnTerm]);
+        });
+        
+        // Clean up special characters but keep common ones
+        cleanedAddress = cleanedAddress
+          .replace(/[^\w\s\.,\-/]/g, ' ') // Remove special characters except common ones
+          .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+          .trim();
+        
+        // Capitalize first letter of each word
+        cleanedAddress = cleanedAddress
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        return cleanedAddress || 'N/A';
+      } catch (error) {
+        console.error('Error formatting address:', error);
+        // Fallback: just clean the address
+        return String(address)
+          .replace(/[^\w\s\.,\-/]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim() || 'N/A';
+      }
     };
-    const statusInfo = statusMap[invoice.status] || { text: invoice.status, color: [128, 128, 128] };
-    doc.fontSize(10).font('Helvetica-Bold');
-    doc.fillColor(statusInfo.color);
-    doc.text(`Status: ${statusInfo.text}`, 50, 100, { align: 'center' });
+
+    // Header with improved styling
+    const headerY = 50;
+    const headerHeight = 60;
+    
+    // Header background box
+    doc.rect(50, headerY, 500, headerHeight)
+      .fillAndStroke([59, 130, 246], [37, 99, 235]); // Blue background with darker border
+    
+    // Title
+    doc.fontSize(28).font('Helvetica-Bold').fillColor('white');
+    doc.text('SALES INVOICE', 50, headerY + 10, { align: 'center', width: 500 });
+    
+    // Invoice number
+    doc.fontSize(12).font('Helvetica');
+    doc.text(`Invoice ${invoice.invoiceNumber}`, 50, headerY + 35, { align: 'center', width: 500 });
+    
+    // Status badge with rounded rectangle effect
+    const statusMap = {
+      draft: { text: 'Draft', color: [107, 114, 128], bgColor: [243, 244, 246] },
+      pending_review: { text: 'Pending Review', color: [234, 179, 8], bgColor: [254, 243, 199] },
+      approved: { text: 'Approved', color: [34, 197, 94], bgColor: [220, 252, 231] },
+      rejected: { text: 'Rejected', color: [239, 68, 68], bgColor: [254, 226, 226] },
+      paid: { text: 'Paid', color: [59, 130, 246], bgColor: [219, 234, 254] }
+    };
+    const statusInfo = statusMap[invoice.status] || { text: invoice.status, color: [107, 114, 128], bgColor: [243, 244, 246] };
+    
+    const statusBoxWidth = 100;
+    const statusBoxHeight = 20;
+    const statusBoxX = (550 - statusBoxWidth) / 2;
+    const statusBoxY = headerY + headerHeight + 10;
+    
+    // Status badge background
+    doc.rect(statusBoxX, statusBoxY, statusBoxWidth, statusBoxHeight)
+      .fillAndStroke(statusInfo.bgColor, statusInfo.color);
+    
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(statusInfo.color);
+    doc.text(`Status: ${statusInfo.text}`, statusBoxX, statusBoxY + 5, { align: 'center', width: statusBoxWidth });
     doc.fillColor('black');
 
     // Two column layout: Customer Information (left) and Invoice Meta (right)
-    let yPos = 140;
+    let yPos = statusBoxY + statusBoxHeight + 30;
+    
+    // Section headers background
+    doc.rect(50, yPos - 5, 240, 20).fill([243, 244, 246]);
+    doc.rect(300, yPos - 5, 250, 20).fill([243, 244, 246]);
     
     // Left column: Customer Information
-    doc.fontSize(11).font('Helvetica-Bold').text('Customer Information', 50, yPos);
-    yPos += 20;
-    doc.fontSize(10).font('Helvetica');
-    doc.text(`Name: ${invoice.customerName || '-'}`, 50, yPos);
+    doc.fontSize(12).font('Helvetica-Bold').fillColor([31, 41, 55]);
+    doc.text('Customer Information', 50, yPos);
+    yPos += 25;
+    
+    // Customer info box - calculate height based on address length
+    const customerBoxY = yPos;
+    const formattedAddress = formatAddress(invoice.customerAddress);
+    const addressLines = doc.heightOfString(formattedAddress, { width: 230 }) / 12; // Approximate line height
+    const customerBoxHeight = Math.max(70, 45 + (Math.ceil(addressLines) * 12));
+    
+    doc.rect(50, customerBoxY - 3, 240, customerBoxHeight).fillAndStroke([255, 255, 255], [229, 231, 235]);
+    
+    doc.fontSize(10).font('Helvetica').fillColor('black');
+    doc.text(`Name: ${invoice.customerName || '-'}`, 55, customerBoxY);
+    yPos = customerBoxY + 15;
+    doc.text(`Phone: ${invoice.customerPhone || '-'}`, 55, yPos);
     yPos += 15;
-    doc.text(`Phone: ${invoice.customerPhone || '-'}`, 50, yPos);
-    yPos += 15;
-    doc.text(`Address: ${invoice.customerAddress || '-'}`, 50, yPos, { width: 240 });
+    
+    // Address with proper formatting and line breaks
+    doc.text('Address:', 55, yPos);
+    yPos += 12;
+    doc.fontSize(9);
+    const addressText = formattedAddress;
+    doc.text(addressText, 55, yPos, { 
+      width: 230,
+      align: 'left',
+      lineGap: 2
+    });
+    doc.fontSize(10); // Reset font size
 
     // Right column: Invoice Meta
-    yPos = 140;
-    doc.fontSize(11).font('Helvetica-Bold').text('Invoice Details', 300, yPos);
-    yPos += 20;
-    doc.fontSize(10).font('Helvetica');
+    yPos = customerBoxY;
+    doc.fontSize(12).font('Helvetica-Bold').fillColor([31, 41, 55]);
+    doc.text('Invoice Details', 300, yPos - 25);
+    
+    // Invoice details box
+    doc.rect(300, yPos - 3, 250, 60).fillAndStroke([255, 255, 255], [229, 231, 235]);
+    
+    doc.fontSize(10).font('Helvetica').fillColor('black');
     
     const paymentConditionMap = {
       cash: 'Cash',
@@ -1495,31 +1660,30 @@ const exportInvoiceAsPDF = async (req, res, next) => {
       net45: 'Net 45',
       net60: 'Net 60'
     };
-    doc.text(`Payment: ${paymentConditionMap[invoice.paymentCondition] || invoice.paymentCondition}`, 300, yPos);
+    doc.text(`Payment: ${paymentConditionMap[invoice.paymentCondition] || invoice.paymentCondition}`, 305, yPos);
     yPos += 15;
-    doc.text(`Currency: ${invoice.currency || '-'}`, 300, yPos);
+    doc.text(`Currency: ${invoice.currency || '-'}`, 305, yPos);
     yPos += 15;
-    doc.text(`VAT: ${invoice.vatRate != null ? invoice.vatRate + '%' : '-'}`, 300, yPos);
+    doc.text(`VAT: ${invoice.vatRate != null ? invoice.vatRate + '%' : '-'}`, 305, yPos);
     yPos += 15;
-    doc.text(`Due date: ${formatDate(invoice.dueDate) || '-'}`, 300, yPos);
+    doc.text(`Due date: ${formatDate(invoice.dueDate) || '-'}`, 305, yPos);
 
-    // Table header
-    yPos = 250;
-    doc.fontSize(10).font('Helvetica-Bold');
+    // Table header with improved styling - adjust based on customer box height
+    yPos = customerBoxY + customerBoxHeight + 15;
+    
+    // Table header background with darker color
+    doc.rect(50, yPos - 5, 500, 22).fillAndStroke([37, 99, 235], [29, 78, 216]);
+    
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('white');
+    doc.text('#', 55, yPos);
+    doc.text('Description', 80, yPos);
+    doc.text('Quantity', 320, yPos);
+    doc.text('Unit Price', 380, yPos, { width: 90, align: 'right' });
+    doc.text('Total', 480, yPos, { width: 70, align: 'right' });
     doc.fillColor('black');
-    // Draw header background
-    doc.rect(50, yPos - 5, 500, 20).fillAndStroke([243, 244, 246], [229, 231, 235]);
-    doc.text('#', 50, yPos);
-    doc.text('Product', 80, yPos);
-    doc.text('Quantity', 300, yPos);
-    doc.text('Unit Price', 360, yPos);
-    doc.text('Total', 450, yPos, { width: 100, align: 'right' });
 
-    // Draw line under header
-    doc.moveTo(50, yPos + 15).lineTo(550, yPos + 15).stroke();
-
-    // Table rows
-    yPos += 25;
+    // Table rows with improved styling
+    yPos += 27;
     doc.font('Helvetica');
     if (invoice.details && invoice.details.length > 0) {
       invoice.details.forEach((detail, index) => {
@@ -1528,101 +1692,109 @@ const exportInvoiceAsPDF = async (req, res, next) => {
           yPos = 50;
         }
 
-        // Alternate row background
-        if (index % 2 === 0) {
-          doc.rect(50, yPos - 3, 500, 18).fill([255, 255, 255]);
-        } else {
-          doc.rect(50, yPos - 3, 500, 18).fill([249, 250, 251]);
-        }
+        // Alternate row background with better contrast
+        const rowBgColor = index % 2 === 0 ? [255, 255, 255] : [249, 250, 251];
+        doc.rect(50, yPos - 3, 500, 20).fillAndStroke(rowBgColor, [229, 231, 235]);
 
         doc.fontSize(9).fillColor('black');
-        doc.text(String(index + 1), 50, yPos);
-        doc.text(detail.productName || detail.product?.name || 'N/A', 80, yPos, { width: 200 });
-        doc.text(String(detail.quantity || 0), 300, yPos);
-        doc.text(formatCurrency(detail.unitPrice || 0, invoice.currency), 360, yPos, { width: 80, align: 'right' });
-        doc.text(formatCurrency(detail.totalPrice || 0, invoice.currency), 450, yPos, { width: 100, align: 'right' });
+        doc.text(String(index + 1), 55, yPos + 2);
         
-        // Draw row border
-        doc.moveTo(50, yPos + 15).lineTo(550, yPos + 15).stroke([229, 231, 235]);
-        yPos += 20;
+        // Product name with better formatting
+        const productName = detail.productName || detail.product?.name || 'N/A';
+        doc.text(productName, 80, yPos + 2, { width: 230 });
+        
+        doc.text(String(detail.quantity || 0), 320, yPos + 2);
+        doc.font('Helvetica');
+        const unitPriceText = formatCurrency(detail.unitPrice || 0, invoice.currency);
+        doc.text(unitPriceText, 380, yPos + 2, { width: 90, align: 'right' });
+        doc.font('Helvetica-Bold');
+        const totalPriceText = formatCurrency(detail.totalPrice || 0, invoice.currency);
+        doc.text(totalPriceText, 480, yPos + 2, { width: 70, align: 'right' });
+        doc.font('Helvetica');
+        
+        yPos += 22;
       });
     } else {
-      doc.fontSize(9).text('No products', 50, yPos);
-      yPos += 20;
+      doc.rect(50, yPos - 3, 500, 20).fillAndStroke([255, 255, 255], [229, 231, 235]);
+      doc.fontSize(9).fillColor([107, 114, 128]).text('No products', 55, yPos + 2);
+      yPos += 22;
     }
 
-    // Summary section - Right aligned box similar to modal
-    yPos = Math.max(yPos + 30, 600);
-    const summaryBoxX = 300;
+    // Summary section - Left aligned box with improved styling and wider width
+    yPos = Math.max(yPos + 20, 600);
+    const summaryBoxX = 50; // Moved to left side
     const summaryBoxY = yPos - 10;
-    const summaryBoxWidth = 250;
-    const summaryBoxHeight = 80;
+    const summaryBoxWidth = 300; // Increased width to show full amounts
+    const summaryBoxHeight = 90;
     
-    // Draw summary box background
-    doc.rect(summaryBoxX, summaryBoxY, summaryBoxWidth, summaryBoxHeight).fillAndStroke([249, 250, 251], [229, 231, 235]);
+    // Draw summary box with better styling
+    doc.rect(summaryBoxX, summaryBoxY, summaryBoxWidth, summaryBoxHeight)
+      .fillAndStroke([249, 250, 251], [37, 99, 235]);
     
-    yPos = summaryBoxY + 15;
-    doc.fontSize(10).font('Helvetica');
+    // Summary header
+    doc.fontSize(11).font('Helvetica-Bold').fillColor([31, 41, 55]);
+    doc.text('Summary', summaryBoxX + 10, summaryBoxY + 8);
+    
+    // Divider line
+    doc.moveTo(summaryBoxX + 10, summaryBoxY + 22)
+      .lineTo(summaryBoxX + summaryBoxWidth - 10, summaryBoxY + 22)
+      .stroke([229, 231, 235]);
+    
+    yPos = summaryBoxY + 30;
+    doc.fontSize(10).font('Helvetica').fillColor('black');
     doc.text('Subtotal', summaryBoxX + 10, yPos);
-    doc.text(formatCurrency(invoice.totalAmount || 0, invoice.currency || 'VND'), summaryBoxX + summaryBoxWidth - 10, yPos, { width: 100, align: 'right' });
-    yPos += 15;
+    const subtotalText = formatCurrency(invoice.totalAmount || 0, invoice.currency || 'VND');
+    doc.text(subtotalText, summaryBoxX + summaryBoxWidth - 10, yPos, { width: 150, align: 'right' });
+    yPos += 18;
 
     doc.text(`VAT (${invoice.vatRate || 0}%)`, summaryBoxX + 10, yPos);
-    doc.text(formatCurrency(invoice.vatAmount || 0, invoice.currency || 'VND'), summaryBoxX + summaryBoxWidth - 10, yPos, { width: 100, align: 'right' });
-    yPos += 20;
-
-    doc.font('Helvetica-Bold').fontSize(12);
+    const vatText = formatCurrency(invoice.vatAmount || 0, invoice.currency || 'VND');
+    doc.text(vatText, summaryBoxX + summaryBoxWidth - 10, yPos, { width: 150, align: 'right' });
+    
+    // Divider before total
+    yPos += 15;
+    doc.moveTo(summaryBoxX + 10, yPos)
+      .lineTo(summaryBoxX + summaryBoxWidth - 10, yPos)
+      .stroke([229, 231, 235]);
+    
+    yPos += 12;
+    doc.font('Helvetica-Bold').fontSize(13).fillColor([37, 99, 235]);
     doc.text('Total:', summaryBoxX + 10, yPos);
-    doc.text(formatCurrency(invoice.finalAmount || 0, invoice.currency || 'VND'), summaryBoxX + summaryBoxWidth - 10, yPos, { width: 100, align: 'right' });
+    const totalText = formatCurrency(invoice.finalAmount || 0, invoice.currency || 'VND');
+    doc.text(totalText, summaryBoxX + summaryBoxWidth - 10, yPos, { width: 150, align: 'right' });
+    doc.fillColor('black');
 
-    // Notes section
+    // Notes section with improved styling
     if (invoice.note) {
       yPos = summaryBoxY + summaryBoxHeight + 20;
-      // Draw note box
-      const noteBoxHeight = 50;
-      doc.rect(50, yPos - 5, 500, noteBoxHeight).fillAndStroke([255, 255, 255], [229, 231, 235]);
-      doc.fontSize(10).font('Helvetica-Bold').text('Note', 50, yPos);
-      yPos += 15;
-      doc.fontSize(9).font('Helvetica');
-      doc.text(invoice.note, 50, yPos, { width: 500 });
+      // Draw note box with better styling
+      const noteBoxHeight = Math.max(50, Math.ceil(doc.heightOfString(invoice.note, { width: 500 }) / 9) * 12 + 30);
+      doc.rect(50, yPos - 5, 500, noteBoxHeight)
+        .fillAndStroke([255, 248, 220], [251, 191, 36]);
+      doc.fontSize(11).font('Helvetica-Bold').fillColor([217, 119, 6]);
+      doc.text('Note', 55, yPos);
+      yPos += 18;
+      doc.fontSize(9).font('Helvetica').fillColor('black');
+      doc.text(invoice.note, 55, yPos, { width: 490 });
     }
 
-    // Review History section
-    if (invoice.accounterReview?.reviewedBy) {
-      yPos = (invoice.note ? yPos + 40 : summaryBoxY + summaryBoxHeight + 20);
-      doc.fontSize(11).font('Helvetica-Bold').text('Review History', 50, yPos);
-      yPos += 20;
-      
-      // Draw review box with green background
-      const reviewBoxHeight = 60;
-      doc.rect(50, yPos - 5, 500, reviewBoxHeight).fillAndStroke([220, 252, 231], [187, 247, 208]);
-      
-      doc.fontSize(9).font('Helvetica');
-      const reviewedByName = invoice.accounterReview.reviewedBy?.accounter?.fullName || 
-                            invoice.accounterReview.reviewedBy?.fullName || 
-                            'N/A';
-      doc.text(`Reviewed by: ${reviewedByName}`, 50, yPos);
-      yPos += 12;
-      
-      const reviewedAt = invoice.accounterReview.reviewedAt ? 
-                        new Date(invoice.accounterReview.reviewedAt).toLocaleString('vi-VN') : 
-                        'N/A';
-      doc.text(`Reviewed at: ${reviewedAt}`, 50, yPos);
-      
-      if (invoice.accounterReview.comment) {
-        yPos += 12;
-        doc.text(`Comment: ${invoice.accounterReview.comment}`, 50, yPos, { width: 500 });
-      }
-    }
-
-    // Footer
+    // Footer with improved styling
     const pageHeight = doc.page.height;
-    doc.fontSize(8).font('Helvetica').text(
+    const footerY = pageHeight - 40;
+    
+    // Footer line
+    doc.moveTo(50, footerY - 10)
+      .lineTo(550, footerY - 10)
+      .stroke([229, 231, 235]);
+    
+    doc.fontSize(8).font('Helvetica').fillColor([107, 114, 128]);
+    doc.text(
       `Xuất ngày: ${new Date().toLocaleDateString('vi-VN')} ${new Date().toLocaleTimeString('vi-VN')}`,
       50,
-      pageHeight - 50,
-      { align: 'center' }
+      footerY,
+      { align: 'center', width: 500 }
     );
+    doc.fillColor('black');
 
     // Finalize PDF - ensure it's properly closed
     doc.end();

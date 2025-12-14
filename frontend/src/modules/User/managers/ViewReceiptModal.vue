@@ -1,16 +1,18 @@
 <template>
-  <div v-if="visible" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 shadow-lg rounded-md bg-white">
-      <div class="mt-3">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-medium text-gray-900">Export Receipt Details</h3>
-          <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+  <div v-if="visible" class="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4" @click.self="$emit('close')">
+    <div class="w-full max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+      <!-- Modal Header - Fixed -->
+      <div class="flex justify-between items-center p-6 border-b border-gray-200 bg-white flex-shrink-0">
+        <h3 class="text-lg font-medium text-gray-900">Export Receipt Details</h3>
+        <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
 
+      <!-- Modal Content - Scrollable -->
+      <div class="flex-1 overflow-y-auto p-6">
         <div v-if="receipt" class="space-y-6">
           <!-- Basic Info -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -131,6 +133,7 @@
 <script>
 export default {
   name: 'ViewReceiptModal',
+  emits: ['close', 'open-review'],
   props: {
     visible: { type: Boolean, default: false },
     receipt: { type: Object, default: null },
@@ -144,11 +147,60 @@ export default {
     getStatusClass: { type: Function, required: true },
     getStatusText: { type: Function, required: true },
   },
+  data() {
+    return {
+      scrollY: 0, // Store scroll position for body scroll prevention
+    };
+  },
+  watch: {
+    visible(val) {
+      if (val) {
+        // Prevent body scroll when modal opens
+        this.preventBodyScroll();
+      } else {
+        // Allow body scroll when modal closes
+        this.allowBodyScroll();
+      }
+    },
+  },
+  mounted() {
+    // Prevent body scroll if modal is already visible
+    if (this.visible) {
+      this.preventBodyScroll();
+    }
+  },
+  beforeUnmount() {
+    // Ensure body scroll is restored when component is destroyed
+    this.allowBodyScroll();
+  },
   methods: {
     safeAmount(a) {
       if (typeof a === 'number' && !isNaN(a)) return a.toFixed(2);
       if (typeof a === 'string' && !isNaN(parseFloat(a))) return parseFloat(a).toFixed(2);
       return '0.00';
+    },
+
+    // Methods to handle body scroll
+    preventBodyScroll() {
+      // Store current scroll position
+      this.scrollY = window.scrollY;
+      // Apply styles to prevent scrolling
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${this.scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    },
+
+    allowBodyScroll() {
+      // Remove fixed positioning
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      // Restore scroll position
+      if (this.scrollY !== undefined) {
+        window.scrollTo(0, this.scrollY);
+      }
     },
   },
 };

@@ -120,6 +120,9 @@
                     SKU
                   </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Batch
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Quantity
                   </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -147,6 +150,9 @@
                     {{ detail.productSku || detail.productId?.sku || 'N/A' }}
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ detail.productId?.productBatch || '—' }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {{ detail.quantity }}
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -167,7 +173,7 @@
               </tbody>
               <tfoot class="bg-gray-50">
                 <tr>
-                  <td colspan="5" class="px-6 py-4 text-right text-sm font-medium text-gray-900">
+                  <td colspan="6" class="px-6 py-4 text-right text-sm font-medium text-gray-900">
                     Total (USD):
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">

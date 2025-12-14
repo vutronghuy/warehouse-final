@@ -479,7 +479,7 @@ export default {
     calculateProductPrice(productId) {
       if (this.getProductPrice) return this.getProductPrice(productId);
       const p = this.availableProducts.find((x) => x._id === productId);
-      return p ? Number(p.finalPrice ?? p.basePrice ?? p.price ?? 0).toFixed(2) : '0.00';
+      return p ? Number(p.finalPrice ?? 0).toFixed(2) : '0.00';
     },
     // Frontend validation methods
     validateField(fieldName) {

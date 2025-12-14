@@ -36,12 +36,13 @@ const productSchema = new Schema(
 
     minStockLevel: { type: Number, default: 0, min: 0 },
     quantity: { type: Number, default: 0, min: 0 }, // Current stock quantity
+    productBatch: { type: String, trim: true, default: '' }, // Batch name (lô nhập)
     warehouseId: {
       type: Schema.Types.ObjectId,
       ref: "Warehouse",
       required: true,
     }, // Product belongs to specific warehouse
-    status: {
+    status: { 
       type: String,
       default: "in stock",
       enum: ["in stock", "out of stock"],
